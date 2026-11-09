@@ -22,7 +22,7 @@ export const DESIGN_META = [
   { id: 'brand', label: 'Brand bauble', sub: 'Brand mark on one side, you on the other' },
 ]
 // World layout (metres). Square centred on the origin, the lane runs along +z.
-export const TREE = { base: 0.9, top: 9.0 }
-export const CRATE = [0, 0, 4.9]
-export const HELD = [0, 1.75, 5.6]
+export const TREE = { base: 0.9, top: 13.5 }
+export const CRATE = [0, 0, 7.0]
+export const HELD = [0, 1.75, 7.9]
 export const BLOCK = /(fuck|shit|cunt|nazi|hitler|admin|mosaicads|official)/i

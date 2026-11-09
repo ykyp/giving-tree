@@ -37,7 +37,7 @@ export const SLEIGH = { x: 3, z: -50, a: -.5 }
 const stallFront = s => [Math.sin(s.a), Math.cos(s.a)]
 /** Points of interest: tap a label (or the thing) to walk there; arriving opens its card. */
 export const POIS = [
-  { id: 'tree', label: 'The Giving Tree', at: [0, 10.4, 0], stand: [0, 8.2], look: [0, 4.6, 0] },
+  { id: 'tree', label: 'The Giving Tree', at: [0, 15.4, 0], stand: [0, 14], look: [0, 7.4, 0] },
   { id: 'post', label: 'Letters to Santa', at: [POSTBOX.x, 2.3, POSTBOX.z], stand: [POSTBOX.x - 1.1, POSTBOX.z - 2.4], look: [POSTBOX.x, 1.1, POSTBOX.z] },
   ...STALLS.map(s => { const [fx, fz] = stallFront(s); return { id: s.id, label: s.name, at: [s.x, 3.7, s.z], stand: [s.x + fx * 3.6, s.z + fz * 3.6], look: [s.x, 1.4, s.z] } }),
   { id: 'rink', label: 'Skating rink', at: [RINK.x, 2.6, RINK.z], stand: [RINK.x + 6.4, RINK.z + 3.2], look: [RINK.x, .8, RINK.z] },
@@ -54,7 +54,7 @@ export function walkable(x, z) {
   return false
 }
 const CIRCLES = [
-  [0, 0, 2.7], [RINK.x, RINK.z, RINK.r + .35], [CAROUSEL.x, CAROUSEL.z, CAROUSEL.r + .45], [POSTBOX.x, POSTBOX.z, .7], [CRATE[0], CRATE[2], 1.2],
+  [0, 0, 4.6], [RINK.x, RINK.z, RINK.r + .35], [CAROUSEL.x, CAROUSEL.z, CAROUSEL.r + .45], [POSTBOX.x, POSTBOX.z, .7], [CRATE[0], CRATE[2], 1.2],
   ...STALLS.map(s => [s.x, s.z, 2.1]), ...LAYOUT.lamps.map(([x, z]) => [x, z, .35]), [-4.6, 21, .7], [4.6, 21, .7],
   ...SNOWMEN.map(([x, z]) => [x, z, .9]), [SLEIGH.x, SLEIGH.z, 1.8],
   [-7.5, 6, 1.1], [7.5, 6, 1.1], [-8, -5, 1.1], [8, -5, 1.1],

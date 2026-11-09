@@ -135,7 +135,7 @@ export default function Hero({ brand }) {
       if (!st8.drag) return; toNdc(e); ray.setFromCamera(ndc, camera)
       const hit = ray.intersectObject(shell, false)[0]
       if (hit) { const n = V(hit.point.x, 0, hit.point.z).normalize(); st8.target.copy(hit.point).addScaledVector(n, .35).add(V(0, -.1, 0)) }
-      else { plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(V()).negate(), V(0, 4, 2.6)); ray.ray.intersectPlane(plane, st8.target) }
+      else { plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(V()).negate(), V(0, 6, 4)); ray.ray.intersectPlane(plane, st8.target) }
       shared.edge = Math.abs(ndc.x) > .78 ? Math.sign(ndc.x) : 0
     }
     const up = () => { if (!st8.drag) return; st8.drag = false; shared.dragging = false; shared.edge = 0
@@ -152,7 +152,7 @@ export default function Hero({ brand }) {
   // "Auto-hang": pick the best free hook facing the camera and fly there
   useEffect(() => useStore.subscribe((s, p) => { if (s.autoHang && !p.autoHang && s.phase === 'hang') {
     useStore.setState({ autoHang: false }); const cam = camera.position, free = freeHooks()
-    let best = -1, bs = -1e9; free.forEach(i => { const h = shared.hooks[i]; const toC = cam.clone().sub(h.p).setY(0).normalize(); const sc = h.n.dot(toC) * 3 - Math.abs(h.y - 4.2) * .5; if (sc > bs) { bs = sc; best = i } })
+    let best = -1, bs = -1e9; free.forEach(i => { const h = shared.hooks[i]; const toC = cam.clone().sub(h.p).setY(0).normalize(); const sc = h.n.dot(toC) * 3 - Math.abs(h.y - 6) * .4; if (sc > bs) { bs = sc; best = i } })
     if (best >= 0) { const h = shared.hooks[best]; st8.auto = { i: best, from: st8.pos.clone(), to: h.p.clone().addScaledVector(h.n, .35), t0: now() } } } }), [camera])
 
   useFrame((_, dtRaw) => {
@@ -184,7 +184,7 @@ export default function Hero({ brand }) {
         st8.pos.set(0, 0, 0).addScaledVector(a.from, (1 - e) ** 2).addScaledVector(mid, 2 * e * (1 - e)).addScaledVector(a.to, e * e); if (e >= 1) { const i = a.i; st8.auto = null; attach(i) } }
       else if (st8.drag) st8.pos.lerp(st8.target, .35)
       else { // rest at the "hand" position, low in the frame
-        const hand = V(0, -.22, .5).unproject(camera).sub(camera.position).normalize().multiplyScalar(5.5).add(camera.position); st8.pos.lerp(hand, .12) }
+        const hand = V(0, -.22, .5).unproject(camera).sub(camera.position).normalize().multiplyScalar(7).add(camera.position); st8.pos.lerp(hand, .12) }
       st8.scale += (1.15 - st8.scale) * .1; st8.spin = t * .7
       // nearest free hook
       let best = -1

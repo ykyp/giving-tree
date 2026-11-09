@@ -37,9 +37,9 @@ export default function Walk() {
   // start: take over from wherever the camera is, then settle at eye height
   useEffect(() => {
     const c = camera.position, inside = walkable(c.x, c.z) && c.y < 6
-    walk.pos.set(inside ? c.x : 0, 0, inside ? c.z : (view === 'tree' ? 10.5 : 9.5)); collide(walk.pos)
+    walk.pos.set(inside ? c.x : 0, 0, inside ? c.z : (view === 'tree' ? 20 : 19)); collide(walk.pos)
     const d = V(); camera.getWorldDirection(d); walk.yaw = inside ? Math.atan2(-d.x, -d.z) : 0; walk.pitch = inside ? clamp(Math.asin(d.y), -.5, .5) : -.04
-    walk.target = null; walk.look = inside ? null : V(0, 4.8, 0); walk.from = { p: c.clone(), q: camera.quaternion.clone(), fov: camera.fov }; walk.enter = now(); shared.scene = scene
+    walk.target = null; walk.look = inside ? null : V(0, 6.8, 0); walk.from = { p: c.clone(), q: camera.quaternion.clone(), fov: camera.fov }; walk.enter = now(); shared.scene = scene
     return () => { walk.target = null; camera.fov = 40; camera.updateProjectionMatrix() }
   }, [])
 

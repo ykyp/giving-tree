@@ -19,7 +19,9 @@ export function PoiLabels() {
       const r = el.getBoundingClientRect(), cur = useStore.getState().poi
       for (const p of POIS) { const d = els.current[p.id]; if (!d) continue
         v.set(...p.at); const dist = w ? Math.hypot(w.pos.x - p.at[0], w.pos.z - p.at[2]) : 30; v.project(cam)
-        const show = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && dist > 2.5 && dist < 75 && cur !== p.id
+        // hidden behind the tree? (segment camera→label passes the trunk)
+        let behind = false; if (p.id !== 'tree') { const ax = cam.position.x, az = cam.position.z, bx = p.at[0] - ax, bz = p.at[2] - az, L2 = bx * bx + bz * bz, u = Math.max(0, Math.min(1, -(ax * bx + az * bz) / L2)); behind = u > 0 && u < 1 && Math.hypot(ax + bx * u, az + bz * u) < 4.2 }
+        const show = !behind && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && dist > 2.5 && dist < 75 && cur !== p.id
         d.style.opacity = show ? String(Math.min(1, (75 - dist) / 20)) : '0'; d.style.pointerEvents = show ? 'auto' : 'none'
         if (show) { const sc = Math.max(.72, Math.min(1.05, 14 / dist + .55)); d.style.transform = `translate(${(v.x * .5 + .5) * r.width}px,${(-v.y * .5 + .5) * r.height}px) translate(-50%,-100%) scale(${sc})` } } }
     loop(); return () => cancelAnimationFrame(raf) }, [])

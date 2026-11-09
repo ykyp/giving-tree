@@ -8,7 +8,7 @@ import { litLevel, glow } from './shared'
 import { LAYOUT, STALLS, RINK, CAROUSEL, POSTBOX, CHURCH, SNOWMEN, SLEIGH, SQUARE_R } from './village'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
-const canvasTex = (w, h, draw, repeat) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat) } return t }
+const canvasTex = (w, h, draw, repeat) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat) } return t }
 export function Environment() {
   const { gl, scene } = useThree()
   useEffect(() => {
@@ -42,16 +42,78 @@ export function Sky() {
   </group>)
 }
 
+/* ---------- ground: deep snow, drifts away from the paths, trodden snow on the cobbles ---------- */
+function valueNoise(seed) {
+  const r = seeded(seed), N = 256, g = new Float32Array(N * N); for (let i = 0; i < g.length; i++) g[i] = r()
+  const at = (x, y) => g[((y & 255) * N) + (x & 255)]
+  const n = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf)
+    return (at(xi, yi) * (1 - u) + at(xi + 1, yi) * u) * (1 - v) + (at(xi, yi + 1) * (1 - u) + at(xi + 1, yi + 1) * u) * v }
+  return (x, y) => n(x, y) * .55 + n(x * 2.1, y * 2.1) * .28 + n(x * 4.3, y * 4.3) * .17
+}
+// distance (m) from a point to the nearest walkable path/square edge (0 inside)
+function edgeDist(x, z) {
+  const dSq = Math.hypot(x, z) - SQUARE_R
+  const dLane = z > 12 && z < 104 ? Math.abs(x) - 4.4 : 99, dBack = z < -18 && z > -60 ? Math.abs(x) - 4.4 : 99
+  return Math.max(0, Math.min(dSq, dLane, dBack))
+}
+// glints: a hashed cell pattern in world space that only lights up at the right viewing angle
+function sparkle(mat, density = .9925, strength = 2.2) {
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed,1.)).xyz;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vWP; float h21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }`)
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      { vec2 c = floor(vWP.xz*34.); float h = h21(c);
+        if (h > ${density.toFixed(4)}) { vec2 f = fract(vWP.xz*34.)-.5; float d = 1.-smoothstep(.0,.22,length(f));
+          vec3 vd = normalize(cameraPosition - vWP); float ph = h21(c+7.1)*6.283;
+          float tw = pow(max(0., sin(dot(vd, vec3(cos(ph),.6,sin(ph)))*22.)), 8.);
+          float fade = 1.-smoothstep(6.,26.,length(cameraPosition-vWP));
+          gl_FragColor.rgb += vec3(.95,.97,1.)*d*tw*fade*${strength.toFixed(2)}; } }`)
+  }
+  mat.customProgramCacheKey = () => 'sparkle' + density
+  return mat
+}
 export function Ground() {
-  const snowTex = useMemo(() => canvasTex(256, 256, (x) => { x.fillStyle = '#7f7f7f'; x.fillRect(0, 0, 256, 256); for (let i = 0; i < 9000; i++) { const v = 100 + Math.random() * 60; x.fillStyle = `rgb(${v},${v},${v})`; x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, Math.random() * 2.2, 0, 7); x.fill() } }, [60, 60]), [])
-  const cobble = useMemo(() => canvasTex(512, 512, (x, w) => { x.fillStyle = '#8c8f9e'; x.fillRect(0, 0, w, w); const r = seeded(9)
-    for (let y = 0; y < 16; y++) for (let i = 0; i < 16; i++) { const v = 150 + r() * 50; x.fillStyle = `rgb(${v},${v},${v + 8})`; x.beginPath(); x.roundRect(i * 32 + (y % 2) * 16 + 2, y * 32 + 2, 28, 28, 8); x.fill() }
-    x.globalAlpha = .55; x.fillStyle = '#eef2fa'; for (let i = 0; i < 260; i++) { x.beginPath(); x.ellipse(r() * w, r() * w, 6 + r() * 30, 4 + r() * 16, r() * 3, 0, 7); x.fill() } }, [10, 10]), [])
+  const { snowMat, geo, trod } = useMemo(() => {
+    const nz = valueNoise(13)
+    // snow surface: soft blue-white with wind-blown streaks; normal-ish detail through a bump map
+    const col = canvasTex(1024, 1024, (x, w) => { x.fillStyle = '#f2f5fb'; x.fillRect(0, 0, w, w)
+      const img = x.getImageData(0, 0, w, w), d = img.data
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 64, j / 64), m = nz(i / 9 + 50, j / 30), v = .93 + n * .07 - m * .025, k = (j * w + i) * 4
+        d[k] = 228 * v; d[k + 1] = 234 * v; d[k + 2] = 246 * Math.min(1.04, v + .03) }
+      x.putImageData(img, 0, 0) }, [26, 26])
+    const bump = canvasTex(512, 512, (x, w) => { const img = x.createImageData(w, w), d = img.data
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const v = (nz(i / 14, j / 14) * .6 + nz(i / 3.5 + 9, j / 3.5) * .4) * 255, k = (j * w + i) * 4; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255 }
+      x.putImageData(img, 0, 0) }, [70, 70])
+    const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, bumpMap: bump, bumpScale: 2.2, roughness: .78, envMapIntensity: .35, color: 0xf4f7ff }))
+    // displaced terrain: flat where you walk, rising into soft drifts beyond
+    const geo = new THREE.PlaneGeometry(420, 420, 230, 230); geo.rotateX(-Math.PI / 2)
+    const pos = geo.attributes.position
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i) + 20, e = edgeDist(x, z), ramp = Math.min(1, e / 6)
+      let h = ramp * ramp * (.25 + .55 * nz(x / 9 + 30, z / 9 + 30))
+      if (e > 30) h += Math.min(1, (e - 30) / 40) * nz(x / 30, z / 30) * 3.5
+      pos.setY(i, h - .02); pos.setZ(i, z) }
+    geo.computeVertexNormals()
+    // trodden snow over cobbles: packed, slightly grey, with bare wet patches and footprint scuffs
+    const trod = canvasTex(1024, 1024, (x, w) => { const r = seeded(9); x.fillStyle = '#5d6070'; x.fillRect(0, 0, w, w)
+      for (let y = 0; y < 32; y++) for (let i = 0; i < 32; i++) { const v = 105 + r() * 45; x.fillStyle = `rgb(${v},${v},${v + 10})`; x.beginPath(); x.roundRect(i * 32 + (y % 2) * 16 + 2, y * 32 + 2, 28, 28, 9); x.fill() }
+      const img = x.getImageData(0, 0, w, w), d = img.data
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 70 + 5, j / 70 + 5) * .75 + nz(i / 12, j / 12) * .25, k = (j * w + i) * 4
+        const cover = Math.min(1, Math.max(0, (n - .26) * 3.2)) * .92 + .08, sv = 222 + nz(i / 6, j / 6) * 22
+        d[k] = d[k] * (1 - cover) + sv * .96 * cover; d[k + 1] = d[k + 1] * (1 - cover) + sv * .98 * cover; d[k + 2] = d[k + 2] * (1 - cover) + sv * 1.04 * cover }
+      x.putImageData(img, 0, 0)
+      x.fillStyle = 'rgba(160,168,190,.16)'; for (let i = 0; i < 110; i++) { const px = r() * w, py = r() * w, a = r() * 6.28; for (let k = 0; k < 6; k++) { x.beginPath(); x.ellipse(px + Math.cos(a) * k * 22 + (k % 2) * 9, py + Math.sin(a) * k * 22, 5, 9, a, 0, 7); x.fill() } } }, [9, 9])
+    return { snowMat, geo, trod }
+  }, [])
+  const trodMat = useMemo(() => sparkle(new THREE.MeshStandardMaterial({ map: trod, roughness: .55, metalness: 0, envMapIntensity: .6 }), .997, 1.4), [trod])
+  const edgeRing = useMemo(() => { const g = new THREE.RingGeometry(SQUARE_R - 1.4, SQUARE_R + .4, 96, 1); g.rotateX(-Math.PI / 2); return g }, [])
   return (<group>
-    <mesh rotation-x={-Math.PI / 2}><circleGeometry args={[260, 64]} /><meshStandardMaterial color={0xd9e1f3} roughness={.85} bumpMap={snowTex} bumpScale={1.2} envMapIntensity={.25} /></mesh>
-    <mesh rotation-x={-Math.PI / 2} position={[0, .01, 0]}><circleGeometry args={[19, 64]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
-    <mesh rotation-x={-Math.PI / 2} position={[0, .012, 62]}><planeGeometry args={[11, 86]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
-    <mesh rotation-x={-Math.PI / 2} position={[0, .012, -40]}><planeGeometry args={[10, 44]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
+    <mesh geometry={geo} material={snowMat} />
+    <mesh rotation-x={-Math.PI / 2} position={[0, .01, 0]} material={trodMat}><circleGeometry args={[SQUARE_R - .2, 96]} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .012, 58]} material={trodMat}><planeGeometry args={[8.4, 92]} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .012, -39]} material={trodMat}><planeGeometry args={[8.4, 42]} /></mesh>
+    <mesh geometry={edgeRing} position={[0, .03, 0]} material={snowMat} />
   </group>)
 }
 
@@ -344,8 +406,8 @@ function SquareLights() {
   // strings of lights from the tree's top out to the edge of the square, like a maypole canopy
   const { geo, mat } = useMemo(() => {
     const pts = [], col = [], pal = [[1, .8, .45], [1, .5, .35], [.55, .85, 1], [.6, 1, .6]]
-    for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2 + .1, A = V(Math.cos(a) * .3, 8.6, Math.sin(a) * .3), B = V(Math.cos(a) * 19.2, 3.4, Math.sin(a) * 19.2)
-      for (let i = 1; i < 34; i++) { const u = i / 34; const p = A.clone().lerp(B, u); p.y -= Math.sin(u * Math.PI) * 1.6; if (Math.hypot(p.x, p.z) < 3.3 - u) continue; pts.push(p); col.push(...pal[(i + k) % 4]) } }
+    for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2 + .1, A = V(Math.cos(a) * .3, 12.8, Math.sin(a) * .3), B = V(Math.cos(a) * 19.2, 3.4, Math.sin(a) * 19.2)
+      for (let i = 1; i < 34; i++) { const u = i / 34; const p = A.clone().lerp(B, u); p.y -= Math.sin(u * Math.PI) * 2.2; if (Math.hypot(p.x, p.z) < Math.max(0, 5 * (1 - (p.y - .9) / 12.6))) continue; pts.push(p); col.push(...pal[(i + k) % 4]) } }
     const g = new THREE.BufferGeometry().setFromPoints(pts); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3))
     const m = new THREE.PointsMaterial({ map: glow, size: .55, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })
     return { geo: g, mat: m }

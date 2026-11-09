@@ -53,9 +53,11 @@ export function addLive(brand) {
 const M = { cap: new THREE.Matrix4(), body: new THREE.Matrix4(), tag: new THREE.Matrix4(), t: new THREE.Matrix4(), r: new THREE.Matrix4(), s: new THREE.Matrix4() }
 const Q = new THREE.Quaternion(), DOWN = new THREE.Vector3(0, -1, 0), C = new THREE.Vector3(), D = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1)
 /** Shared by crowd and hero: compute cap/body/tag matrices for an ornament hanging from A. */
+export const ORN_SCALE = 1.3
 export function hangMatrices(o, A, t, design, scale = 1, out = M) {
+  scale *= ORN_SCALE
   if (o.bob) C.copy(o.bob)
-  else { const sw = 0.07 * Math.sin(t * 1.15 + o.ph); C.set(A.x + Math.sin(sw) * o.L, A.y - Math.cos(sw) * o.L, A.z) }
+  else { const sw = 0.07 * Math.sin(t * 1.15 + o.ph), L = o.L * ORN_SCALE; C.set(A.x + Math.sin(sw) * L, A.y - Math.cos(sw) * L, A.z) }
   D.copy(C).sub(A).normalize(); Q.setFromUnitVectors(DOWN, D)
   out.cap.compose(C, Q, ONE.set(scale, scale, scale))
   let spin = o.ph + t * 0.5 * o.dir

@@ -6,13 +6,13 @@ import { useStore } from '../store'
 import { seeded, clamp, easeBack, now } from '../lib/util'
 import { shared, litLevel, glow } from './shared'
 
-export const Rsil = y => Math.max(0.1, 3.3 * Math.pow(clamp(1 - (y - TREE.base) / (TREE.top - TREE.base), 0, 1), 1.08) + 0.08)
+export const Rsil = y => Math.max(0.1, 4.9 * Math.pow(clamp(1 - (y - TREE.base) / (TREE.top - TREE.base), 0, 1), 1.08) + 0.08)
 export const TOP_Y = TREE.top + 0.5
 
 /* ---------- branch layout (tier-independent, so hooks are identical on every device) ---------- */
 const BRANCHES = []
 {
-  const r = seeded(77), T = 40
+  const r = seeded(77), T = 50
   for (let i = 0; i < T; i++) {
     const h = i / (T - 1), y = TREE.base + Math.pow(h, 0.92) * (TREE.top - TREE.base - 0.3), R = Rsil(y)
     const nb = Math.max(5, Math.round(6 + 11 * (1 - h))), a0 = r() * 6.28
@@ -26,7 +26,7 @@ const ptOf = (B, s) => new THREE.Vector3(Math.cos(B.a) * s, B.y + B.droop * s + 
 const tgOf = (B, s) => new THREE.Vector3(Math.cos(B.a), B.droop + 0.12 * s, Math.sin(B.a)).normalize()
 // hang points at the branch tips, spaced out
 {
-  const all = BRANCHES.filter(B => B.y > 1.4 && B.y < 8.0).map(B => { const s = B.L * 0.95, d = new THREE.Vector3(Math.cos(B.a), 0, Math.sin(B.a))
+  const all = BRANCHES.filter(B => B.y > 1.5 && B.y < TREE.top - 1.4).map(B => { const s = B.L * 0.95, d = new THREE.Vector3(Math.cos(B.a), 0, Math.sin(B.a))
     return { p: ptOf(B, s).addScaledVector(d, 0.08).add(new THREE.Vector3(0, -0.12, 0)), n: d, y: B.y } })
   const r = seeded(5), keep = []
   all.map(h => [r(), h]).sort((a, b) => a[0] - b[0]).forEach(([, h]) => { if (keep.every(k => k.p.distanceTo(h.p) > 0.8)) keep.push(h) })
@@ -93,11 +93,11 @@ export default function Tree({ tier, brand }) {
   }, [tier, needleMat])
 
   /* string lights */
-  const N = tier === 'low' ? 260 : 380
+  const N = tier === 'low' ? 380 : 560
   const lights = useMemo(() => {
     const P = new Float32Array(N * 3), C = new Float32Array(N * 3), T = new Float32Array(N), r = seeded(91)
     const pal = [[1, .78, .45], [1, .78, .45], [1, .78, .45], [1, .6, .3], [1, .86, .62]]
-    for (let i = 0; i < N; i++) { const t = i / N, y = TREE.base + 0.4 + t * (TREE.top - TREE.base - 0.9), rad = Rsil(y + 0.3) * 0.93 + 0.05, a = t * 6.2832 * 9.5 + (r() - .5) * .1
+    for (let i = 0; i < N; i++) { const t = i / N, y = TREE.base + 0.4 + t * (TREE.top - TREE.base - 0.9), rad = Rsil(y + 0.3) * 0.93 + 0.05, a = t * 6.2832 * 12 + (r() - .5) * .1
       P.set([Math.cos(a) * rad, y + Math.sin(a * 3) * .05, Math.sin(a) * rad], i * 3); C.set(pal[Math.floor(r() * pal.length)], i * 3); T[i] = t }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setAttribute('aT', new THREE.BufferAttribute(T, 1))
     const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(.03, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), N)
@@ -146,12 +146,12 @@ export default function Tree({ tier, brand }) {
   return (
     <group>
       <primitive object={cards} />
-      <mesh position={[0, TREE.base + 3.7, 0]}><coneGeometry args={[2.45, 7.6, 28, 1, true]} /><meshStandardMaterial color={0x173a24} roughness={1} side={THREE.DoubleSide} envMapIntensity={.1} /></mesh>
-      <mesh position={[0, .75, 0]}><cylinderGeometry args={[.14, .26, 1.9, 14]} /><meshStandardMaterial color={0x3b2617} roughness={1} /></mesh>
+      <mesh position={[0, TREE.base + 5.9, 0]}><coneGeometry args={[3.7, 11.8, 32, 1, true]} /><meshStandardMaterial color={0x173a24} roughness={1} side={THREE.DoubleSide} envMapIntensity={.1} /></mesh>
+      <mesh position={[0, .75, 0]}><cylinderGeometry args={[.2, .36, 1.9, 14]} /><meshStandardMaterial color={0x3b2617} roughness={1} /></mesh>
       <Skirt />
       <primitive object={lights.bulbs} /><primitive object={lights.pts} />
-      <sprite ref={halo} position={[0, 4.6, -2]} scale={[16, 16, 1]}><spriteMaterial map={glow} color={0xffa050} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} /></sprite>
-      <group ref={topper} position={[0, TOP_Y, 0]} visible={false} onClick={onStar}>
+      <sprite ref={halo} position={[0, 6.6, -3]} scale={[24, 24, 1]}><spriteMaterial map={glow} color={0xffa050} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} /></sprite>
+      <group ref={topper} position={[0, TOP_Y, 0]} scale={1.45} visible={false} onClick={onStar}>
         {disc ? <mesh rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[.58, .58, .11, 48]} /><meshStandardMaterial attach="material" map={disc} emissive="#ffffff" emissiveMap={disc} emissiveIntensity={.5} metalness={.4} roughness={.35} /></mesh>
           : <mesh geometry={starGeo}><meshStandardMaterial color={0xffd27a} emissive={0xffa53a} emissiveIntensity={1.6} metalness={.8} roughness={.25} /></mesh>}
         <sprite ref={topGlow} scale={[4, 4, 1]}><spriteMaterial map={glow} color={0xffd27a} transparent opacity={.6} depthWrite={false} blending={THREE.AdditiveBlending} /></sprite>
@@ -165,5 +165,5 @@ function Skirt() {
   const tex = useMemo(() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.fillStyle = '#7d1020'; x.fillRect(0, 0, 256, 256)
     for (let i = 0; i < 4000; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? 0 : 255},0,20,${Math.random() * .12})`; x.fillRect(Math.random() * 256, Math.random() * 256, 2, 2) }
     x.strokeStyle = '#f1e6d0'; x.lineWidth = 10; x.beginPath(); x.arc(128, 128, 118, 0, 7); x.stroke(); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t }, [])
-  return <mesh position={[0, .03, 0]}><cylinderGeometry args={[2.3, 2.35, .05, 48]} /><meshStandardMaterial map={tex} roughness={.95} envMapIntensity={.2} /></mesh>
+  return <mesh position={[0, .03, 0]}><cylinderGeometry args={[3.5, 3.55, .05, 56]} /><meshStandardMaterial map={tex} roughness={.95} envMapIntensity={.2} /></mesh>
 }
