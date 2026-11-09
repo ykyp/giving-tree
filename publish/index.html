@@ -144,9 +144,11 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 
 /* Walking the village */
 .poi-layer{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden}
-.poi{position:absolute;left:0;top:0;transform-origin:50% 100%;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:600;color:#3b2406;background:linear-gradient(#fff3d6,#f2c46d);border:0;border-radius:999px;padding:6px 11px 6px 8px;white-space:nowrap;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:opacity .3s}
-.poi::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:#f2c46d}
-.poi span{font-size:14px}
+.poi{position:absolute;left:0;top:0;transform-origin:50% 100%;display:inline-flex;align-items:center;gap:8px;font:inherit;color:#fff;background:rgba(12,16,38,.62);border:1px solid rgba(242,196,109,.45);border-radius:999px;padding:4px 12px 4px 4px;white-space:nowrap;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:opacity .3s;text-align:left}
+.poi::after{content:"";position:absolute;left:50%;bottom:-7px;width:1.5px;height:7px;margin-left:-.75px;background:rgba(242,196,109,.7)}
+.poi-i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:14px;background:radial-gradient(circle at 35% 30%,#fff3d6,#f2c46d 60%,#c9952f)}
+.poi-t{display:flex;flex-direction:column;line-height:1.1}.poi-t b{font-size:13px;font-weight:600}.poi-d{font-size:11px;color:#c9cfe2;font-variant-numeric:tabular-nums}
+.poi:hover,.poi:focus-visible{background:rgba(12,16,38,.85)}
 .minimap{position:absolute;top:60px;right:14px;width:104px;height:104px;z-index:5;cursor:pointer;filter:drop-shadow(0 4px 12px rgba(0,0,0,.4))}
 .mm-bg{fill:#dfe6f5}.mm-walk{fill:#b9bfcf}.mm-house{fill:#7b5a46}.mm-ice{fill:#bfe0ff}.mm-thing{fill:#c9a35a}.mm-stall{fill:#b3122e}.mm-tree{fill:#1f5a35}
 .mm-me{fill:#ff4f8b;stroke:#fff;stroke-width:1.5}.mm-ring{fill:none;stroke:rgba(255,255,255,.85);stroke-width:2}

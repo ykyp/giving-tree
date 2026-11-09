@@ -37,7 +37,7 @@ function twigTexture() {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'); const r = seeded(31)
   const stemY = s => 128 - Math.sin(s * 3.1) * 6
   const needle = (px, py, ang, len, w, dark) => { const ex = px + Math.cos(ang) * len, ey = py + Math.sin(ang) * len
-    const g = x.createLinearGradient(px, py, ex, ey); g.addColorStop(0, dark ? '#0f2e1c' : '#183f27'); g.addColorStop(.55, dark ? '#225636' : '#2f6d40'); g.addColorStop(1, dark ? '#43804f' : '#78ae6c')
+    const g = x.createLinearGradient(px, py, ex, ey); g.addColorStop(0, dark ? '#0c2618' : '#143522'); g.addColorStop(.55, dark ? '#1b4a2e' : '#275f39'); g.addColorStop(1, dark ? '#346f45' : '#5b9460')
     x.strokeStyle = g; x.lineWidth = w; x.lineCap = 'round'; x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke() }
   for (let pass = 0; pass < 2; pass++) {
     if (pass === 1) for (let k = 0; k < 9; k++) { const s = 0.1 + k * 0.095, px = 10 + s * 490, py = stemY(s), side = k % 2 ? 1 : -1, a = side * (0.55 + r() * 0.2), len = 150 - k * 9
@@ -52,7 +52,7 @@ function twigTexture() {
 
 export default function Tree({ tier, brand }) {
   const needleMat = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ map: twigTexture(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: .8, envMapIntensity: .35, emissive: new THREE.Color(0xff9a40), emissiveIntensity: 0 })
+    const m = new THREE.MeshStandardMaterial({ map: twigTexture(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: .8, envMapIntensity: .12, emissive: new THREE.Color(0xff9a40), emissiveIntensity: 0 })
     m.userData.uTime = { value: 0 }
     m.onBeforeCompile = sh => { sh.uniforms.uTime = m.userData.uTime
       sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <project_vertex>', `
@@ -64,7 +64,18 @@ export default function Tree({ tier, brand }) {
         float sw = sin(uTime*1.1 + mvPosition.y*0.55 + mvPosition.x*0.3) * 0.018 * rr;
         mvPosition.x += sw; mvPosition.z += sw*0.5; mvPosition.y += sin(uTime*1.7 + mvPosition.x)*0.006*rr;
         mvPosition = modelViewMatrix * mvPosition;
-        gl_Position = projectionMatrix * mvPosition;`) }
+        gl_Position = projectionMatrix * mvPosition;
+        #ifdef USE_INSTANCING
+          vSnowN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;
+        #else
+          vSnowN = normalize(mat3(modelMatrix) * objectNormal).y;
+        #endif`).replace('#include <common>', '#include <common>\nvarying float vSnowN;')
+      // fresh snow resting on the upward-facing needles, thicker on the outer tips
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSnowN;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          { float ny = gl_FrontFacing ? vSnowN : -vSnowN; float lum = dot(diffuseColor.rgb, vec3(.3,.6,.1));
+            float snowAmt = smoothstep(.55, .95, ny) * smoothstep(.07, .2, lum) * .55;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8,.86,1.), snowAmt); }`) }
     m.customProgramCacheKey = () => 'needles'
     return m
   }, [])
@@ -85,7 +96,9 @@ export default function Tree({ tier, brand }) {
         const len = (0.62 + r() * 0.22) * (k === K - 1 ? 0.85 : 1), wid = 0.55 + r() * 0.12
         add(ptOf(B, s), tgOf(B, s), len, wid, (r() - .5) * 0.7, 0, col)
         if (side && d > 0.2) { add(ptOf(B, s), tgOf(B, s), len * .72, wid * .85, .35 + r() * .3, .62 + r() * .2, col.clone().multiplyScalar(.92))
-          add(ptOf(B, s), tgOf(B, s), len * .72, wid * .85, -.35 - r() * .3, -.62 - r() * .2, col.clone().multiplyScalar(.92)) } } }
+          add(ptOf(B, s), tgOf(B, s), len * .72, wid * .85, -.35 - r() * .3, -.62 - r() * .2, col.clone().multiplyScalar(.92)) }
+        // a steeply rolled card for volume, so branches read as fluffy sprays rather than flat slats
+        if (side && d > 0.35 && r() < .7) add(ptOf(B, s).add(new THREE.Vector3(0, .05, 0)), tgOf(B, s), len * .66, wid * .8, (r() < .5 ? 1 : -1) * (1.0 + r() * .35), (r() - .5) * .5, col.clone().multiplyScalar(.85)) } }
     for (let k = 0; k < 8; k++) { const a = k / 8 * 6.28; add(new THREE.Vector3(Math.cos(a) * .05, TREE.top - 0.7, Math.sin(a) * .05), new THREE.Vector3(Math.cos(a) * .25, 1, Math.sin(a) * .25).normalize(), .95, .38, 0, 0, new THREE.Color(1, 1, .95)) }
     const im = new THREE.InstancedMesh(geo, needleMat, mats.length)
     mats.forEach((m, i) => { im.setMatrixAt(i, m); im.setColorAt(i, cols[i]) }); im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.frustumCulled = false

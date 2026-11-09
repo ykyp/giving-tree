@@ -38,7 +38,7 @@ export function Sky() {
       vertexShader="varying float vY; void main(){ vY=normalize(position).y; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }"
       fragmentShader="varying float vY; void main(){ vec3 a=vec3(.2,.19,.38), b=vec3(.07,.1,.27), c=vec3(.02,.035,.11); vec3 col = vY<0.08 ? mix(a,b,smoothstep(-.05,.08,vY)) : mix(b,c,smoothstep(.08,.6,vY)); gl_FragColor=vec4(col,1.); }" /></mesh>
     <points geometry={stars} material={mat} />
-    <sprite position={[-110, 120, -190]} scale={[55, 55, 1]}><spriteMaterial map={moon} fog={false} depthWrite={false} transparent /></sprite>
+    <sprite position={[-175, 150, -120]} scale={[50, 50, 1]}><spriteMaterial map={moon} fog={false} depthWrite={false} transparent /></sprite>
   </group>)
 }
 
@@ -80,13 +80,13 @@ export function Ground() {
     // snow surface: soft blue-white with wind-blown streaks; normal-ish detail through a bump map
     const col = canvasTex(1024, 1024, (x, w) => { x.fillStyle = '#f2f5fb'; x.fillRect(0, 0, w, w)
       const img = x.getImageData(0, 0, w, w), d = img.data
-      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 64, j / 64), m = nz(i / 9 + 50, j / 30), v = .93 + n * .07 - m * .025, k = (j * w + i) * 4
+      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 64, j / 64), m = nz(i / 9 + 50, j / 30), v = .94 + n * .06, k = (j * w + i) * 4
         d[k] = 228 * v; d[k + 1] = 234 * v; d[k + 2] = 246 * Math.min(1.04, v + .03) }
       x.putImageData(img, 0, 0) }, [26, 26])
     const bump = canvasTex(512, 512, (x, w) => { const img = x.createImageData(w, w), d = img.data
       for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const v = (nz(i / 14, j / 14) * .6 + nz(i / 3.5 + 9, j / 3.5) * .4) * 255, k = (j * w + i) * 4; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255 }
       x.putImageData(img, 0, 0) }, [70, 70])
-    const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, bumpMap: bump, bumpScale: 2.2, roughness: .78, envMapIntensity: .35, color: 0xf4f7ff }))
+    const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, bumpMap: bump, bumpScale: .7, roughness: .78, envMapIntensity: .35, color: 0xf4f7ff }))
     // displaced terrain: flat where you walk, rising into soft drifts beyond
     const geo = new THREE.PlaneGeometry(420, 420, 230, 230); geo.rotateX(-Math.PI / 2)
     const pos = geo.attributes.position
@@ -106,13 +106,15 @@ export function Ground() {
       x.fillStyle = 'rgba(160,168,190,.16)'; for (let i = 0; i < 110; i++) { const px = r() * w, py = r() * w, a = r() * 6.28; for (let k = 0; k < 6; k++) { x.beginPath(); x.ellipse(px + Math.cos(a) * k * 22 + (k % 2) * 9, py + Math.sin(a) * k * 22, 5, 9, a, 0, 7); x.fill() } } }, [9, 9])
     return { snowMat, geo, trod }
   }, [])
-  const trodMat = useMemo(() => sparkle(new THREE.MeshStandardMaterial({ map: trod, roughness: .55, metalness: 0, envMapIntensity: .6 }), .997, 1.4), [trod])
+  // one material per surface so each gets a texture repeat matching its real size (≈5 m per tile)
+  const trodMat = useMemo(() => { const mk = (rx, rz) => { const t = trod.clone(); t.needsUpdate = true; t.repeat.set(rx, rz); return sparkle(new THREE.MeshStandardMaterial({ map: t, roughness: .55, metalness: 0, envMapIntensity: .6 }), .997, 1.4) }
+    return { sq: mk(9, 9), lane: mk(8.4 / 5.3, 92 / 5.3), back: mk(8.4 / 5.3, 42 / 5.3) } }, [trod])
   const edgeRing = useMemo(() => { const g = new THREE.RingGeometry(SQUARE_R - 1.4, SQUARE_R + .4, 96, 1); g.rotateX(-Math.PI / 2); return g }, [])
   return (<group>
     <mesh geometry={geo} material={snowMat} />
-    <mesh rotation-x={-Math.PI / 2} position={[0, .01, 0]} material={trodMat}><circleGeometry args={[SQUARE_R - .2, 96]} /></mesh>
-    <mesh rotation-x={-Math.PI / 2} position={[0, .012, 58]} material={trodMat}><planeGeometry args={[8.4, 92]} /></mesh>
-    <mesh rotation-x={-Math.PI / 2} position={[0, .012, -39]} material={trodMat}><planeGeometry args={[8.4, 42]} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .01, 0]} material={trodMat.sq}><circleGeometry args={[SQUARE_R - .2, 96]} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .012, 58]} material={trodMat.lane}><planeGeometry args={[8.4, 92]} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .012, -39]} material={trodMat.back}><planeGeometry args={[8.4, 42]} /></mesh>
     <mesh geometry={edgeRing} position={[0, .03, 0]} material={snowMat} />
   </group>)
 }
@@ -132,7 +134,13 @@ export function Village({ brand }) {
     const eave = []; let ic = 0
     const roof = new THREE.InstancedMesh(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe6ecf6, roughness: .8, envMapIntensity: .3 }), n)
     const chim = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x6b4a3a, roughness: 1 }), n)
-    const winMat = new THREE.MeshBasicMaterial({ color: 0x5a4630, toneMapped: false })
+    const winTex = canvasTex(128, 160, (x, w, h) => {
+      const g = x.createRadialGradient(w / 2, h * .62, 6, w / 2, h * .55, h * .7); g.addColorStop(0, '#fff2cf'); g.addColorStop(.55, '#ffc978'); g.addColorStop(1, '#b8692e'); x.fillStyle = g; x.fillRect(0, 0, w, h)
+      x.fillStyle = 'rgba(160,40,40,.55)'; x.beginPath(); x.moveTo(10, 10); x.quadraticCurveTo(34, 70, 22, h - 14); x.lineTo(10, h - 14); x.fill(); x.beginPath(); x.moveTo(w - 10, 10); x.quadraticCurveTo(w - 34, 70, w - 22, h - 14); x.lineTo(w - 10, h - 14); x.fill()
+      x.fillStyle = 'rgba(60,30,10,.25)'; x.fillRect(w * .3, h * .7, w * .4, h * .2)
+      x.fillStyle = '#2b1e14'; x.fillRect(0, 0, w, 10); x.fillRect(0, 0, 10, h); x.fillRect(w - 10, 0, 10, h); x.fillRect(0, h - 16, w, 16); x.fillRect(w / 2 - 4, 0, 8, h); x.fillRect(0, h * .45, w, 7)
+      x.fillStyle = '#eef3fb'; x.beginPath(); x.ellipse(w / 2, h - 15, w * .55, 7, 0, Math.PI, 0); x.fill() })
+    const winMat = new THREE.MeshBasicMaterial({ map: winTex, color: 0x5a4630, toneMapped: false })
     const wins = new THREE.InstancedMesh(new THREE.PlaneGeometry(.9, 1.2), winMat, n * 8)
     const doorG = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 2.2, .12), new THREE.MeshStandardMaterial({ color: 0x4a2c1c, roughness: .7 }), n)
     const wreath = new THREE.InstancedMesh(new THREE.TorusGeometry(.32, .1, 8, 18), new THREE.MeshStandardMaterial({ color: 0x1f5a35, roughness: .9 }), n)
@@ -212,7 +220,7 @@ export function Village({ brand }) {
     <points geometry={archLights}><pointsMaterial map={glow} color={0xffd08a} size={.7} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
     <mesh position={[0, 5.15, 21.1]}><planeGeometry args={[8, 1.5]} /><meshStandardMaterial map={banner} roughness={.8} side={THREE.DoubleSide} emissive={'#ffffff'} emissiveMap={banner} emissiveIntensity={.25} /></mesh>
     <Church /><Hills /><Stalls /><Benches /><Rink /><Carousel /><Birds />
-    <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch />
+    <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch /><LightPools />
   </group>)
 }
 
@@ -316,7 +324,7 @@ export function Snow({ tier }) {
 
 export function Lights() {
   const a = useRef(), b = useRef(), c = useRef(), d = useRef()
-  useFrame(({ scene }) => { const L = litLevel(); if (a.current) { a.current.intensity = L * 22; b.current.intensity = L * 16; c.current.intensity = L * 10; d.current.intensity = L * 14 } scene.environmentIntensity = .35 + .75 * L })
+  useFrame(({ scene }) => { const L = litLevel(); if (a.current) { a.current.intensity = L * 9; b.current.intensity = L * 7; c.current.intensity = L * 6; d.current.intensity = L * 14 } scene.environmentIntensity = .35 + .75 * L })
   return (<group>
     <hemisphereLight args={[0x8899dd, 0x2b2238, .75]} />
     <directionalLight color={0xc8d6ff} intensity={1.05} position={[-30, 40, 24]} />
@@ -404,16 +412,19 @@ function Sleigh() {
 }
 function SquareLights() {
   // strings of lights from the tree's top out to the edge of the square, like a maypole canopy
-  const { geo, mat } = useMemo(() => {
+  const { geo, mat, wire } = useMemo(() => {
     const pts = [], col = [], pal = [[1, .8, .45], [1, .5, .35], [.55, .85, 1], [.6, 1, .6]]
     for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2 + .1, A = V(Math.cos(a) * .3, 12.8, Math.sin(a) * .3), B = V(Math.cos(a) * 19.2, 3.4, Math.sin(a) * 19.2)
       for (let i = 1; i < 34; i++) { const u = i / 34; const p = A.clone().lerp(B, u); p.y -= Math.sin(u * Math.PI) * 2.2; if (Math.hypot(p.x, p.z) < Math.max(0, 5 * (1 - (p.y - .9) / 12.6))) continue; pts.push(p); col.push(...pal[(i + k) % 4]) } }
     const g = new THREE.BufferGeometry().setFromPoints(pts); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3))
-    const m = new THREE.PointsMaterial({ map: glow, size: .55, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })
-    return { geo: g, mat: m }
+    const m = new THREE.PointsMaterial({ map: glow, size: .3, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })
+    const wp = []; for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2 + .1, A = V(Math.cos(a) * .3, 12.8, Math.sin(a) * .3), B = V(Math.cos(a) * 19.2, 3.4, Math.sin(a) * 19.2)
+      let prev = null; for (let i = 0; i <= 34; i++) { const u = i / 34, p = A.clone().lerp(B, u); p.y -= Math.sin(u * Math.PI) * 2.2; if (Math.hypot(p.x, p.z) < Math.max(0, 5 * (1 - (p.y - .9) / 12.6))) { prev = null; continue } if (prev) wp.push(prev, p); prev = p } }
+    const wire = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(wp), new THREE.LineBasicMaterial({ color: 0x141a22, transparent: true, opacity: .7 }))
+    return { geo: g, mat: m, wire }
   }, [])
   useFrame(() => { mat.opacity = litLevel() * (.85 + Math.sin(now() * 2) * .1) })
-  return <points geometry={geo} material={mat} frustumCulled={false} />
+  return <group><points geometry={geo} material={mat} frustumCulled={false} /><primitive object={wire} /></group>
 }
 function BackArch() {
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(V(-4.4, 4.6, -22), V(0, 6.8, -22), V(4.4, 4.6, -22)), [])
@@ -423,4 +434,22 @@ function BackArch() {
     <mesh><tubeGeometry args={[curve, 30, .32, 8, false]} /><meshStandardMaterial color={0x1f5a35} roughness={1} /></mesh>
     <points geometry={lights}><pointsMaterial map={glow} color={0xffd08a} size={.6} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
   </group>)
+}
+
+/* Warm pools of light on the snow under lamps, at doors, by the stalls and round the tree (additive decals). */
+function LightPools() {
+  const { mesh, mat } = useMemo(() => {
+    const tex = canvasTex(128, 128, (x, w) => { const g = x.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,190,110,.9)'); g.addColorStop(.35, 'rgba(255,170,90,.38)'); g.addColorStop(1, 'rgba(255,150,70,0)'); x.fillStyle = g; x.fillRect(0, 0, w, w) })
+    const spots = [[0, 0, 13]]
+    LAYOUT.lamps.forEach(([x, z]) => spots.push([x, z, 6.5]))
+    LAYOUT.houses.forEach(h => { const fx = Math.sin(h.face), fz = Math.cos(h.face); spots.push([h.x + fx * (h.d / 2 + 1.6), h.z + fz * (h.d / 2 + 1.6), 4.2]) })
+    STALLS.forEach(s => spots.push([s.x + Math.sin(s.a) * 1.6, s.z + Math.cos(s.a) * 1.6, 6]))
+    spots.push([CAROUSEL.x, CAROUSEL.z, 12])
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 })
+    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat, spots.length)
+    const m = new THREE.Matrix4(); spots.forEach(([x, z, s], i) => mesh.setMatrixAt(i, m.compose(V(x, .06, z), new THREE.Quaternion(), V(s, 1, s)))); mesh.frustumCulled = false
+    return { mesh, mat }
+  }, [])
+  useFrame(() => { mat.opacity = .22 + .5 * litLevel() })
+  return <primitive object={mesh} />
 }
