@@ -3,5 +3,10 @@
   "framework": "vite",
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/c/:id", "destination": "/index.html" },
+    { "source": "/me/:token", "destination": "/index.html" },
+    { "source": "/t/:brand", "destination": "/index.html" }
+  ]
 }
