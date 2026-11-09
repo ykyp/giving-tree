@@ -9,6 +9,7 @@ import Hero from './three/Hero'
 import CameraRig from './three/CameraRig'
 import Director from './three/Director'
 import Effects from './three/Effects'
+import Walk from './three/Walk'
 import { Environment, Sky, Ground, Village, Snow, Lights } from './three/World'
 import Overlay from './ui/Overlay'
 import Panel from './ui/Panel'
@@ -20,6 +21,8 @@ function detectTier() {
     return cores >= 6 && mem >= 4 ? 'mid' : 'low' } catch (e) { return 'mid' }
 }
 const hasWebGL2 = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch (e) { return false } })()
+
+function WalkGate() { const on = useStore(s => s.phase === 'explore' && s.exploreMode === 'walk'); return on ? <Walk /> : null }
 
 export default function App() {
   const brandKey = useStore(s => s.brandKey), tierPref = useStore(s => s.tier)
@@ -45,7 +48,7 @@ export default function App() {
               <Crowd brand={brand} />
               <Hero brand={brand} />
               <Snow tier={tier} />
-              <CameraRig /><Director />
+              <CameraRig /><Director /><WalkGate />
               <Effects tier={tier} />
             </Suspense>
           </Canvas>

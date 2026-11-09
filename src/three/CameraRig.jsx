@@ -40,7 +40,7 @@ function cylLerp(out, a, b, e) {
 
 export default function CameraRig() {
   const { camera } = useThree()
-  const phase = useStore(s => s.phase), view = useStore(s => s.view), focus = useStore(s => s.focus), run = useStore(s => s.run)
+  const phase = useStore(s => s.phase), view = useStore(s => s.view), focus = useStore(s => s.focus), run = useStore(s => s.run), mode = useStore(s => s.exploreMode)
   const rig = useRef({ pos: V(6, 30, 118), look: V(0, 10, 70), from: null, fromLook: null, t0: 0, key: '' }).current
   const controls = useRef()
   useEffect(() => { shared.camera = camera }, [camera])
@@ -50,7 +50,7 @@ export default function CameraRig() {
 
   useFrame((_, dt) => {
     const s = useStore.getState(), t = now()
-    if (s.phase === 'explore') { rig.pos.copy(camera.position); controls.current?.getTarget(rig.look); return }
+    if (s.phase === 'explore') { rig.pos.copy(camera.position); if (controls.current) controls.current.getTarget(rig.look); else { const d = V(0, 0, 0); camera.getWorldDirection(d); rig.look.copy(camera.position).addScaledVector(d, 10) } return }
     if (s.phase === 'arrival') {
       const e = reduceMotion ? 1 : ease((t - s.phaseAt) / FLY_DUR); FLY.getPoint(e, rig.pos); FLY_LOOK.getPoint(e, rig.look)
     } else {
@@ -68,19 +68,19 @@ export default function CameraRig() {
 
   // explore: orbit controls take over the camera
   useEffect(() => {
-    if (phase !== 'explore' || !controls.current) return
+    if (phase !== 'explore' || mode !== 'orbit' || !controls.current) return
     const c = controls.current, tree = view === 'tree'
     c.setLookAt(camera.position.x, camera.position.y, camera.position.z, rig.look.x, rig.look.y, rig.look.z, false)
     c.setLookAt(4, tree ? 6.8 : 5.6, tree ? 20 : 19.5, 0, tree ? 6.4 : 4.6, 0, true)
-  }, [phase, view])
+  }, [phase, view, mode])
   useEffect(() => {
-    const c = controls.current; if (phase !== 'explore' || !c) return
+    const c = controls.current; if (phase !== 'explore' || mode !== 'orbit' || !c) return
     if (focus == null) { c.minDistance = 4; c.setLookAt(4, view === 'tree' ? 6.8 : 5.6, view === 'tree' ? 20 : 19.5, 0, view === 'tree' ? 6.4 : 4.6, 0, true); return }
     let wp, hook
     if (focus === 'hero') { wp = shared.heroBody.clone(); hook = shared.hooks[useStore.getState().heroHook] }
     else { const o = crowd.list.find(x => x.id === focus); if (!o) return; wp = o.wp.clone(); hook = shared.hooks[o.hook] }
     c.minDistance = .4; const p = wp.clone().addScaledVector(hook.n, 1.9).add(V(0, .18, 0))
     c.setLookAt(p.x, p.y, p.z, wp.x, wp.y - .05, wp.z, true)
-  }, [focus, phase])
-  return phase === 'explore' ? <CameraControls ref={controls} makeDefault minDistance={4} maxDistance={40} minPolarAngle={.55} maxPolarAngle={1.62} smoothTime={.45} draggingSmoothTime={.12} dollySpeed={.6} /> : null
+  }, [focus, phase, mode])
+  return phase === 'explore' && mode === 'orbit' ? <CameraControls ref={controls} makeDefault minDistance={4} maxDistance={40} minPolarAngle={.55} maxPolarAngle={1.62} smoothTime={.45} draggingSmoothTime={.12} dollySpeed={.6} /> : null
 }

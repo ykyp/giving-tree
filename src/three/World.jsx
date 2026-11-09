@@ -5,26 +5,10 @@ import { RoundedBoxGeometry } from 'three-stdlib'
 import { useStore } from '../store'
 import { seeded, now } from '../lib/util'
 import { litLevel, glow } from './shared'
+import { LAYOUT, STALLS, RINK, CAROUSEL, POSTBOX, CHURCH, SNOWMEN, SLEIGH, SQUARE_R } from './village'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 const canvasTex = (w, h, draw, repeat) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat) } return t }
-const HOUSE_COLS = ['#e8dcc4', '#c76f4f', '#8fae96', '#6e86a8', '#d4a94e', '#c98b8b', '#efe9df', '#a7b8c9']
-
-/* ---------- layout (deterministic) ---------- */
-function buildLayout() {
-  const r = seeded(21), houses = [], lamps = [], pines = []
-  // lane houses, both sides
-  for (const side of [-1, 1]) for (let z = 26; z < 104;) { const w = 6 + r() * 2.5; houses.push({ x: side * (9 + r() * .6), z: z + w / 2, w, d: 7, h: 4.5 + r() * 3.5, face: side < 0 ? Math.PI / 2 : -Math.PI / 2, c: HOUSE_COLS[Math.floor(r() * HOUSE_COLS.length)] }); z += w + .6 }
-  // square ring, leaving the lane opening
-  for (let i = 0; i < 18; i++) { const a = Math.PI / 2 + 0.42 + (i / 17) * (Math.PI * 2 - 0.84); const R = 28 + r() * 2.5, w = 7 + r() * 2.5
-    houses.push({ x: Math.cos(a) * R, z: Math.sin(a) * R, w, d: 7, h: 5 + r() * 4, face: Math.atan2(-Math.cos(a), -Math.sin(a)), c: HOUSE_COLS[Math.floor(r() * HOUSE_COLS.length)] }) }
-  for (let z = 26; z < 104; z += 12) for (const s of [-1, 1]) lamps.push([s * 4.8, z])
-  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; if (Math.sin(a) > 0.3) continue; lamps.push([Math.cos(a) * 15.5, Math.sin(a) * 15.5]) }
-  for (let i = 0; i < 220; i++) { const a = r() * 6.28, R = 40 + r() * 75, x = Math.cos(a) * R, z = Math.sin(a) * R; if (Math.abs(x) < 18 && z > 10) continue; pines.push([x, z, 4 + r() * 6]) }
-  return { houses, lamps, pines }
-}
-const LAYOUT = buildLayout()
-
 export function Environment() {
   const { gl, scene } = useThree()
   useEffect(() => {
@@ -67,6 +51,7 @@ export function Ground() {
     <mesh rotation-x={-Math.PI / 2}><circleGeometry args={[260, 64]} /><meshStandardMaterial color={0xd9e1f3} roughness={.85} bumpMap={snowTex} bumpScale={1.2} envMapIntensity={.25} /></mesh>
     <mesh rotation-x={-Math.PI / 2} position={[0, .01, 0]}><circleGeometry args={[19, 64]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
     <mesh rotation-x={-Math.PI / 2} position={[0, .012, 62]}><planeGeometry args={[11, 86]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, .012, -40]}><planeGeometry args={[10, 44]} /><meshStandardMaterial map={cobble} color={0xb9bfcf} roughness={.75} envMapIntensity={.35} /></mesh>
   </group>)
 }
 
@@ -74,7 +59,15 @@ export function Village({ brand }) {
   const view = useStore(s => s.view), from = useStore(s => s.from)
   const parts = useMemo(() => {
     const { houses, lamps, pines } = LAYOUT, r = seeded(33), n = houses.length, o = new THREE.Object3D(), m4 = new THREE.Matrix4()
-    const body = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, .04).translate(0, .5, 0), new THREE.MeshStandardMaterial({ roughness: .9, envMapIntensity: .25 }), n)
+    // timber-framed walls: the texture is white plaster + dark beams, tinted per house by instance colour
+    const timber = canvasTex(256, 256, (x, w) => { x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, w); const g = x.createLinearGradient(0, 0, 0, w); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(60,40,20,.12)'); x.fillStyle = g; x.fillRect(0, 0, w, w)
+      x.fillStyle = '#4a3322'; const b = 9; x.fillRect(0, 0, w, b); x.fillRect(0, w - b, w, b); x.fillRect(0, 0, b, w); x.fillRect(w - b, 0, b, w); x.fillRect(0, w * .47, w, b * .8)
+      for (const px of [.25, .75]) x.fillRect(px * w - b / 2, 0, b, w)
+      x.lineWidth = b * .8; x.strokeStyle = '#4a3322'; x.beginPath(); x.moveTo(0, w * .47); x.lineTo(w * .25, 0); x.moveTo(w, w * .47); x.lineTo(w * .75, 0); x.moveTo(w * .25, w); x.lineTo(0, w * .5); x.moveTo(w * .75, w); x.lineTo(w, w * .5); x.stroke() })
+    const body = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, .04).translate(0, .5, 0), new THREE.MeshStandardMaterial({ map: timber, roughness: .9, envMapIntensity: .25 }), n)
+    const icicles = new THREE.InstancedMesh(new THREE.ConeGeometry(.045, 1, 5).rotateX(Math.PI).translate(0, -.5, 0), new THREE.MeshStandardMaterial({ color: 0xd8ecff, roughness: .1, metalness: .1, transparent: true, opacity: .85, envMapIntensity: 2 }), n * 16)
+    const piles = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshStandardMaterial({ color: 0xeef3fb, roughness: .9 }), n * 2)
+    const eave = []; let ic = 0
     const roof = new THREE.InstancedMesh(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe6ecf6, roughness: .8, envMapIntensity: .3 }), n)
     const chim = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x6b4a3a, roughness: 1 }), n)
     const winMat = new THREE.MeshBasicMaterial({ color: 0x5a4630, toneMapped: false })
@@ -93,9 +86,13 @@ export function Village({ brand }) {
       for (let ry = 0; ry < rows; ry++) for (let k = 0; k < cols; k++) { if (ry === 0 && k === Math.floor(cols / 2)) continue; if (r() < .18) continue
         o.position.set((-.5 + (k + .5) / cols) * h.w, 1.6 + ry * 2.6, h.d / 2 + .02); o.scale.set(1, 1, 1); o.updateMatrix(); wins.setMatrixAt(wi++, m4.multiplyMatrices(base, o.matrix)) }
       o.position.set(((Math.floor(cols / 2) + .5) / cols - .5) * h.w, 1.1, h.d / 2 + .04); o.updateMatrix(); doorG.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
-      o.position.y = 1.6; o.position.z = h.d / 2 + .14; o.updateMatrix(); wreath.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.y = 1.6; o.position.z = h.d / 2 + .14; o.scale.set(1, 1, 1); o.updateMatrix(); wreath.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      // fairy lights along the eave, icicles below them, snow banked by the walls
+      for (let k = 0; k <= 14; k++) { const ex = (-.5 + k / 14) * h.w * 1.06; eave.push([...V(ex, h.h - .02 + Math.sin(k / 14 * Math.PI) * -.06, h.d * .57).applyMatrix4(base).toArray(), 4 + (i + k) % 3]) }
+      for (let k = 0; k < 15 && ic < n * 16; k++) { if (r() < .25) continue; const len = .18 + r() * .5; o.position.set((-.5 + (k + .5) / 15) * h.w, h.h - .08, h.d * .56); o.scale.set(1, len, 1); o.updateMatrix(); icicles.setMatrixAt(ic++, m4.multiplyMatrices(base, o.matrix)) }
+      for (const sx of [-1, 1]) { o.position.set(sx * h.w * .38, .05, h.d / 2 + .35); o.scale.set(1 + r() * .8, .35 + r() * .2, .6); o.updateMatrix(); piles.setMatrixAt(i * 2 + (sx > 0 ? 1 : 0), m4.multiplyMatrices(base, o.matrix)) }
     })
-    wins.count = wi
+    wins.count = wi; icicles.count = ic
     // lamps
     const post = new THREE.InstancedMesh(new THREE.CylinderGeometry(.08, .12, 4.2, 10).translate(0, 2.1, 0), new THREE.MeshStandardMaterial({ color: 0x14182c, roughness: .5, metalness: .6 }), lamps.length)
     const headMat = new THREE.MeshBasicMaterial({ color: 0x806040, toneMapped: false })
@@ -109,17 +106,17 @@ export function Village({ brand }) {
       o.position.set(x, h * .62, z); o.scale.set(h * .14, h * .3, h * .14); o.updateMatrix(); pineS.setMatrixAt(i, o.matrix) })
     // garland lights across the lane + lamp glows (one points cloud)
     const gl = []; for (let z = 30; z < 100; z += 10) { for (let i = 0; i <= 24; i++) { const u = i / 24, x = -8.6 + u * 17.2; gl.push([x, 6.2 - Math.sin(u * Math.PI) * 1.4, z, i % 3]) } }
-    lamps.forEach(([x, z]) => gl.push([x, 4.3, z, 3]))
+    lamps.forEach(([x, z]) => gl.push([x, 4.3, z, 3])); eave.forEach(e => gl.push(e))
     const P = new Float32Array(gl.length * 3), C = new Float32Array(gl.length * 3), S = new Float32Array(gl.length)
-    const pal = [[1, .55, .35], [1, .85, .5], [.6, .85, 1], [1, .8, .55]]
+    const pal = [[1, .55, .35], [1, .85, .5], [.6, .85, 1], [1, .8, .55], [1, .35, .3], [.45, 1, .55], [1, .82, .45]]
     gl.forEach(([x, y, z, c], i) => { P.set([x, y, z], i * 3); C.set(pal[c], i * 3); S[i] = c === 3 ? 3.2 : 1 })
     const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.BufferAttribute(P, 3)); gg.setAttribute('color', new THREE.BufferAttribute(C, 3)); gg.setAttribute('aS', new THREE.BufferAttribute(S, 1))
     const glMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true, uniforms: { uL: { value: 0 }, uMap: { value: glow }, uScale: { value: 800 }, uTime: { value: 0 } },
       vertexShader: 'attribute float aS; uniform float uL,uScale,uTime; varying vec3 vC; varying float vA; void main(){ vC=color; vA=(.25+.75*uL)*(.85+.15*sin(uTime*2.+position.x)); vec4 mv=modelViewMatrix*vec4(position,1.); gl_PointSize=min(uScale*.09*aS/-mv.z, uScale*.05); gl_Position=projectionMatrix*mv; }',
       fragmentShader: 'uniform sampler2D uMap; varying vec3 vC; varying float vA; void main(){ gl_FragColor=vec4(vC*texture2D(uMap,gl_PointCoord).a*vA,1.); }' })
     const glPts = new THREE.Points(gg, glMat); glPts.frustumCulled = false
-    ;[body, roof, chim, wins, doorG, wreath, post, head, pineA, pineS].forEach(m => { m.frustumCulled = false })
-    return { body, roof, chim, wins, winMat, doorG, wreath, post, head, headMat, pineA, pineS, glPts, glMat, smokePts }
+    ;[body, roof, chim, wins, doorG, wreath, post, head, pineA, pineS, icicles, piles].forEach(m => { m.frustumCulled = false })
+    return { body, roof, chim, wins, winMat, doorG, wreath, post, head, headMat, pineA, pineS, glPts, glMat, smokePts, icicles, piles }
   }, [])
 
   const banner = useMemo(() => canvasTex(1024, 192, (x, w, h) => {
@@ -142,7 +139,7 @@ export function Village({ brand }) {
   })
 
   return (<group>
-    {['body', 'roof', 'chim', 'wins', 'doorG', 'wreath', 'post', 'head', 'pineA', 'pineS', 'glPts'].map(k => <primitive key={k} object={parts[k]} />)}
+    {['body', 'roof', 'chim', 'wins', 'doorG', 'wreath', 'post', 'head', 'pineA', 'pineS', 'glPts', 'icicles', 'piles'].map(k => <primitive key={k} object={parts[k]} />)}
     <group ref={smoke}>{Array.from({ length: Math.min(30, parts.smokePts.length * 3) }, (_, i) =>
       <sprite key={i}><spriteMaterial map={glow} color={0xc9d2e6} transparent opacity={.2} depthWrite={false} /></sprite>)}</group>
     {/* garland arch with the brand banner */}
@@ -153,13 +150,14 @@ export function Village({ brand }) {
     <points geometry={archLights}><pointsMaterial map={glow} color={0xffd08a} size={.7} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
     <mesh position={[0, 5.15, 21.1]}><planeGeometry args={[8, 1.5]} /><meshStandardMaterial map={banner} roughness={.8} side={THREE.DoubleSide} emissive={'#ffffff'} emissiveMap={banner} emissiveIntensity={.25} /></mesh>
     <Church /><Hills /><Stalls /><Benches /><Rink /><Carousel /><Birds />
+    <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch />
   </group>)
 }
 
 function Church() {
   const winMat = useMemo(() => new THREE.MeshBasicMaterial({ color: 0x5a4630, toneMapped: false }), [])
   useFrame(() => { const L = litLevel(); winMat.color.setRGB(.35 + 1.6 * L, .27 + 1.1 * L, .17 + .55 * L) })
-  return (<group position={[-16, 0, -58]} rotation={[0, .25, 0]}>
+  return (<group position={[CHURCH.x, 0, CHURCH.z]}>
     <mesh position={[0, 4.5, 0]}><boxGeometry args={[10, 9, 18]} /><meshStandardMaterial color={0xd8cfc0} roughness={.95} /></mesh>
     <mesh position={[0, 10.5, 0]} rotation={[0, 0, 0]} scale={[10.8, 3, 18.6]}><cylinderGeometry args={[.6, .6, 1, 3]} /><meshStandardMaterial color={0xe6ecf6} roughness={.8} /></mesh>
     <mesh position={[0, 8, 10]}><boxGeometry args={[4.2, 16, 4.2]} /><meshStandardMaterial color={0xd0c6b6} roughness={.95} /></mesh>
@@ -177,13 +175,16 @@ function Stalls() {
   const canopy = useMemo(() => canvasTex(256, 64, (x) => { for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#f3eee4' : '#b3122e'; x.fillRect(i * 32, 0, 32, 64) } }), [])
   const lightsMat = useRef()
   useFrame(() => { if (lightsMat.current) lightsMat.current.opacity = .25 + .75 * litLevel() })
-  const pos = [[-10.5, 9.5, .9], [-13.5, -3.5, 1.4], [12.8, 4, -1.4]]
+  const pos = STALLS.map(s => [s.x, s.z, s.a])
+  const signs = useMemo(() => STALLS.map(s => canvasTex(512, 128, (x, w, h) => { x.fillStyle = s.sign; x.fillRect(0, 0, w, h); x.strokeStyle = '#e8c46a'; x.lineWidth = 6; x.strokeRect(6, 6, w - 12, h - 12)
+    x.fillStyle = '#fff6e0'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '600 56px "Instrument Serif", Georgia, serif'; x.fillText(s.name, w / 2, h / 2 + 4) })), [])
   const lg = useMemo(() => { const p = []; pos.forEach(([x, z, a]) => { for (let i = 0; i <= 12; i++) { const u = i / 12 - .5; p.push(V(x + Math.cos(a) * u * 3.4, 2.75 - Math.abs(Math.sin(u * 6.28)) * .12, z - Math.sin(a) * u * 3.4)) } }); return new THREE.BufferGeometry().setFromPoints(p) }, [])
   return (<group>
     {pos.map(([x, z, a], i) => <group key={i} position={[x, 0, z]} rotation={[0, a, 0]}>
       <mesh position={[0, .55, 0]}><boxGeometry args={[3.2, 1.1, 1.4]} /><meshStandardMaterial color={0x7a4a2a} roughness={.85} /></mesh>
       {[-1.5, 1.5].map(px => <mesh key={px} position={[px, 1.5, -.55]}><boxGeometry args={[.12, 3, .12]} /><meshStandardMaterial color={0x5e3b20} /></mesh>)}
       <mesh position={[0, 2.95, -.1]} rotation={[-.35, 0, 0]}><boxGeometry args={[3.6, .08, 1.9]} /><meshStandardMaterial map={canopy} roughness={.8} /></mesh>
+      <mesh position={[0, 3.35, .62]} rotation={[-.12, 0, 0]}><planeGeometry args={[2.8, .7]} /><meshStandardMaterial map={signs[i]} emissive="#ffffff" emissiveMap={signs[i]} emissiveIntensity={.35} roughness={.8} /></mesh>
       {[-.9, 0, .9].map(px => <mesh key={px} position={[px, 1.25, .1]}><boxGeometry args={[.5, .3, .5]} /><meshStandardMaterial color={['#e8c46a', '#a5122a', '#0e5a3c'][(px + .9) / .9 | 0]} roughness={.5} /></mesh>)}
     </group>)}
     <points geometry={lg}><pointsMaterial ref={lightsMat} map={glow} color={0xffcf86} size={.55} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
@@ -200,7 +201,7 @@ function Benches() {
 function Rink() {
   const sk = useRef(); const cols = ['#a5122a', '#1b4d8f', '#e8c46a', '#0e5a3c']
   useFrame(() => { const t = now(); sk.current?.children.forEach((g, i) => { const a = t * (.35 + i * .04) + i * 1.6, R = 2.4 + (i % 2) * 1.1; g.position.set(Math.cos(a) * R, 0, Math.sin(a) * R); g.rotation.set(0, -a, .18) }) })
-  return (<group position={[-12, 0, -8]}>
+  return (<group position={[RINK.x, 0, RINK.z]}>
     <mesh rotation-x={-Math.PI / 2} position={[0, .03, 0]}><circleGeometry args={[4.8, 48]} /><meshStandardMaterial color={0xcfe6ff} metalness={.3} roughness={.08} envMapIntensity={1.6} /></mesh>
     <mesh rotation-x={Math.PI / 2} position={[0, .45, 0]}><torusGeometry args={[4.9, .07, 6, 64]} /><meshStandardMaterial color={0xe8e2d4} roughness={.6} /></mesh>
     <group ref={sk}>{cols.map((c, i) => <group key={i}>
@@ -215,7 +216,7 @@ function Carousel() {
   const lightsMat = useRef()
   useFrame(() => { const t = now(); if (rot.current) { rot.current.rotation.y = t * .35; rot.current.children.forEach((c, i) => { if (c.userData.horse) c.position.y = 1.2 + Math.sin(t * 2 + i) * .25 }) } if (lightsMat.current) lightsMat.current.opacity = .3 + .7 * litLevel() })
   const ring = useMemo(() => new THREE.BufferGeometry().setFromPoints(Array.from({ length: 36 }, (_, i) => V(Math.cos(i / 36 * 6.28) * 4.1, 3.9, Math.sin(i / 36 * 6.28) * 4.1))), [])
-  return (<group position={[12.5, 0, -8]}>
+  return (<group position={[CAROUSEL.x, 0, CAROUSEL.z]}>
     <mesh position={[0, .2, 0]}><cylinderGeometry args={[4.2, 4.3, .4, 40]} /><meshStandardMaterial color={0x7d1020} roughness={.6} /></mesh>
     <group ref={rot}>
       {Array.from({ length: 10 }, (_, i) => { const a = i / 10 * 6.28; return [
@@ -261,5 +262,103 @@ export function Lights() {
     <pointLight ref={b} color={0xffb866} position={[-.5, 6, 1.2]} distance={12} decay={1.3} intensity={0} />
     <pointLight ref={c} color={0xffa04a} position={[0, 1.6, 4.5]} distance={9} decay={1.4} intensity={0} />
     <pointLight ref={d} color={0xffb070} position={[0, 4, 30]} distance={30} decay={1.2} intensity={0} />
+  </group>)
+}
+
+/* ---------- Christmas village props ---------- */
+function Snowmen() {
+  const snow = { color: 0xf3f6fb, roughness: .85 }
+  return (<group>{SNOWMEN.map(([x, z], i) => <group key={i} position={[x, 0, z]} rotation={[0, Math.atan2(-x, -z), 0]}>
+    <mesh position={[0, .55, 0]}><sphereGeometry args={[.62, 20, 14]} /><meshStandardMaterial {...snow} /></mesh>
+    <mesh position={[0, 1.38, 0]}><sphereGeometry args={[.44, 20, 14]} /><meshStandardMaterial {...snow} /></mesh>
+    <mesh position={[0, 2, 0]}><sphereGeometry args={[.32, 20, 14]} /><meshStandardMaterial {...snow} /></mesh>
+    <mesh position={[0, 2, .38]} rotation={[Math.PI / 2, 0, 0]}><coneGeometry args={[.06, .34, 10]} /><meshStandardMaterial color={0xe8742c} roughness={.6} /></mesh>
+    {[-.11, .11].map(ex => <mesh key={ex} position={[ex, 2.1, .28]}><sphereGeometry args={[.035, 8, 6]} /><meshStandardMaterial color={0x111111} /></mesh>)}
+    {[0, 1, 2].map(k => <mesh key={k} position={[0, 1.55 - k * .17, .42 - k * .015]}><sphereGeometry args={[.04, 8, 6]} /><meshStandardMaterial color={0x111111} /></mesh>)}
+    <mesh position={[0, 2.38, 0]}><cylinderGeometry args={[.22, .22, .32, 18]} /><meshStandardMaterial color={0x1a1a24} roughness={.6} /></mesh>
+    <mesh position={[0, 2.23, 0]}><cylinderGeometry args={[.36, .36, .04, 22]} /><meshStandardMaterial color={0x1a1a24} roughness={.6} /></mesh>
+    <mesh position={[0, 1.72, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[.3, .07, 8, 20]} /><meshStandardMaterial color={['#a5122a', '#1b4d8f', '#0e5a3c', '#e8c46a'][i]} roughness={.9} /></mesh>
+    {[-1, 1].map(s => <mesh key={s} position={[s * .62, 1.5, 0]} rotation={[0, 0, s * -.9]}><cylinderGeometry args={[.025, .035, .7, 5]} /><meshStandardMaterial color={0x4a3020} /></mesh>)}
+  </group>)}</group>)
+}
+function CandyCanes() {
+  const { stick, hook, tex } = useMemo(() => {
+    const tex = canvasTex(64, 256, (x, w, h) => { x.fillStyle = '#f5f1ea'; x.fillRect(0, 0, w, h); x.fillStyle = '#c3122f'; for (let i = -4; i < 20; i++) { x.save(); x.translate(0, i * 22); x.transform(1, -.6, 0, 1, 0, 0); x.fillRect(0, 0, w, 10); x.restore() } }, [1, 3])
+    const spots = []
+    for (let z = 22; z < 102; z += 6) for (const s of [-1, 1]) spots.push([s * 4.25, z])
+    for (let z = -24; z > -58; z -= 6) for (const s of [-1, 1]) spots.push([s * 4.25, z])
+    for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; if (Math.abs(Math.cos(a)) < .2) continue; spots.push([Math.cos(a) * 19, Math.sin(a) * 19]) }
+    const mat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: .35, clearcoat: 1 })
+    const stick = new THREE.InstancedMesh(new THREE.CylinderGeometry(.07, .07, 1.3, 10).translate(0, .65, 0), mat, spots.length)
+    const hook = new THREE.InstancedMesh(new THREE.TorusGeometry(.18, .07, 8, 14, Math.PI), mat, spots.length)
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion()
+    spots.forEach(([x, z], i) => { const a = Math.atan2(x, z); stick.setMatrixAt(i, m.makeTranslation(x, 0, z))
+      q.setFromEuler(new THREE.Euler(0, a + Math.PI / 2, 0)); m.compose(V(x, 1.3, z), q, V(1, 1, 1)); m.multiply(new THREE.Matrix4().makeTranslation(-.18, 0, 0)); hook.setMatrixAt(i, m) })
+    return { stick, hook, tex }
+  }, [])
+  return <group><primitive object={stick} /><primitive object={hook} /></group>
+}
+function Fence() {
+  const parts = useMemo(() => {
+    const R = 19.6, pts = []
+    for (let i = 0; i < 520; i++) { const a = i / 520 * Math.PI * 2; if (Math.abs(a - Math.PI / 2) < .27 || Math.abs(a - Math.PI * 1.5) < .25) continue; pts.push(a) }
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: .9 }), snow = new THREE.MeshStandardMaterial({ color: 0xf0f4fb, roughness: .9 })
+    const pick = new THREE.InstancedMesh(new THREE.BoxGeometry(.09, 1, .05).translate(0, .5, 0), wood, pts.length)
+    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(.07, 6, 4), snow, pts.length)
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion()
+    pts.forEach((a, i) => { q.setFromEuler(new THREE.Euler(0, -a + Math.PI / 2, 0)); m.compose(V(Math.cos(a) * R, 0, Math.sin(a) * R), q, V(1, .9 + (i % 2) * .12, 1)); pick.setMatrixAt(i, m)
+      caps.setMatrixAt(i, new THREE.Matrix4().compose(V(Math.cos(a) * R, 1.05 + (i % 2) * .1, Math.sin(a) * R), q, V(1, .55, 1))) })
+    return { pick, caps, wood, snow }
+  }, [])
+  const rail = (y, a0, a1) => <mesh position={[0, y, 0]} rotation={[Math.PI / 2, 0, a0]}><torusGeometry args={[19.6, .04, 4, 120, a1 - a0]} /><meshStandardMaterial color={0x6e4a2c} roughness={.9} /></mesh>
+  // two arcs: east side and west side (openings at the lane and the back path)
+  return (<group><primitive object={parts.pick} /><primitive object={parts.caps} />
+    {[.35, .8].map(y => <group key={y}>{rail(y, -Math.PI / 2 + .25, Math.PI / 2 - .27)}{rail(y, Math.PI / 2 + .27, Math.PI * 1.5 - .25)}</group>)}</group>)
+}
+function Postbox() {
+  const sign = useMemo(() => canvasTex(512, 160, (x, w, h) => { x.fillStyle = '#f3ead6'; x.fillRect(0, 0, w, h); x.strokeStyle = '#a5122a'; x.lineWidth = 8; x.strokeRect(8, 8, w - 16, h - 16)
+    x.fillStyle = '#a5122a'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '78px "Great Vibes", cursive'; x.fillText('Letters to Santa', w / 2, h / 2 + 6) }), [])
+  const red = { color: 0xb3122e, roughness: .35, metalness: .2, envMapIntensity: 1.2 }
+  return (<group position={[POSTBOX.x, 0, POSTBOX.z]} rotation={[0, Math.atan2(-POSTBOX.x, -POSTBOX.z), 0]}>
+    <mesh position={[0, .08, 0]}><cylinderGeometry args={[.42, .46, .16, 24]} /><meshStandardMaterial color={0x1a1a24} /></mesh>
+    <mesh position={[0, .85, 0]}><cylinderGeometry args={[.36, .38, 1.4, 24]} /><meshStandardMaterial {...red} /></mesh>
+    <mesh position={[0, 1.55, 0]}><sphereGeometry args={[.4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} /><meshStandardMaterial {...red} /></mesh>
+    <mesh position={[0, 1.22, .36]}><boxGeometry args={[.36, .05, .04]} /><meshStandardMaterial color={0x111111} /></mesh>
+    <mesh position={[0, 2.25, 0]}><planeGeometry args={[1.4, .44]} /><meshStandardMaterial map={sign} side={THREE.DoubleSide} roughness={.8} emissive="#ffffff" emissiveMap={sign} emissiveIntensity={.3} /></mesh>
+    <mesh position={[0, 1.95, -.02]}><boxGeometry args={[.05, .6, .05]} /><meshStandardMaterial color={0x1a1a24} /></mesh>
+    <mesh position={[0, 1.96, 0]}><sphereGeometry args={[.42, 16, 8, 0, Math.PI * 2, 0, Math.PI / 3]} /><meshStandardMaterial color={0xf0f4fb} roughness={.9} /></mesh>
+  </group>)
+}
+function Sleigh() {
+  const red = { color: 0xa5122a, roughness: .35, clearcoat: 1, envMapIntensity: 1.2 }, gold = { color: 0xd8b45c, metalness: 1, roughness: .3 }
+  return (<group position={[SLEIGH.x, 0, SLEIGH.z]} rotation={[0, SLEIGH.a, 0]}>
+    <mesh position={[0, .8, 0]}><boxGeometry args={[1.5, .7, 2.4]} /><meshPhysicalMaterial {...red} /></mesh>
+    <mesh position={[0, 1.2, -1.05]}><boxGeometry args={[1.5, 1, .3]} /><meshPhysicalMaterial {...red} /></mesh>
+    <mesh position={[0, 1.1, 1.2]} rotation={[.6, 0, 0]}><boxGeometry args={[1.5, .5, .2]} /><meshPhysicalMaterial {...red} /></mesh>
+    {[-.7, .7].map(x => <mesh key={x} position={[x, .38, 0]} rotation={[0, Math.PI / 2, 0]}><torusGeometry args={[1.25, .05, 6, 30, Math.PI * .75]} /><meshStandardMaterial {...gold} /></mesh>)}
+    {[[-.35, .3, '#0e5a3c'], [.35, .1, '#1b4d8f'], [0, -.5, '#e8c46a']].map(([x, z, c], i) => <mesh key={i} position={[x, 1.35, z]} rotation={[0, i, 0]}><boxGeometry args={[.5, .45, .5]} /><meshStandardMaterial color={c} roughness={.45} /></mesh>)}
+    <mesh position={[0, 1.18, .2]}><boxGeometry args={[1.45, .06, 1.6]} /><meshStandardMaterial color={0xf0f4fb} roughness={.9} /></mesh>
+  </group>)
+}
+function SquareLights() {
+  // strings of lights from the tree's top out to the edge of the square, like a maypole canopy
+  const { geo, mat } = useMemo(() => {
+    const pts = [], col = [], pal = [[1, .8, .45], [1, .5, .35], [.55, .85, 1], [.6, 1, .6]]
+    for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2 + .1, A = V(Math.cos(a) * .3, 8.6, Math.sin(a) * .3), B = V(Math.cos(a) * 19.2, 3.4, Math.sin(a) * 19.2)
+      for (let i = 1; i < 34; i++) { const u = i / 34; const p = A.clone().lerp(B, u); p.y -= Math.sin(u * Math.PI) * 1.6; if (Math.hypot(p.x, p.z) < 3.3 - u) continue; pts.push(p); col.push(...pal[(i + k) % 4]) } }
+    const g = new THREE.BufferGeometry().setFromPoints(pts); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3))
+    const m = new THREE.PointsMaterial({ map: glow, size: .55, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 })
+    return { geo: g, mat: m }
+  }, [])
+  useFrame(() => { mat.opacity = litLevel() * (.85 + Math.sin(now() * 2) * .1) })
+  return <points geometry={geo} material={mat} frustumCulled={false} />
+}
+function BackArch() {
+  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(V(-4.4, 4.6, -22), V(0, 6.8, -22), V(4.4, 4.6, -22)), [])
+  const lights = useMemo(() => new THREE.BufferGeometry().setFromPoints(curve.getPoints(28).map(p => p.clone().add(V(0, .05, .25)))), [curve])
+  return (<group>
+    {[-4.4, 4.4].map(x => <mesh key={x} position={[x, 2.3, -22]}><cylinderGeometry args={[.26, .3, 4.6, 12]} /><meshStandardMaterial color={0x2a4d36} roughness={.95} /></mesh>)}
+    <mesh><tubeGeometry args={[curve, 30, .32, 8, false]} /><meshStandardMaterial color={0x1f5a35} roughness={1} /></mesh>
+    <points geometry={lights}><pointsMaterial map={glow} color={0xffd08a} size={.6} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
   </group>)
 }

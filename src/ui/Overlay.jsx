@@ -6,6 +6,10 @@ import { amt, money, ago, now } from '../lib/util'
 import { ensure, setSound, chime } from '../lib/audio'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
+import { PoiLabels, Minimap, PoiCard } from './WalkHUD'
+import { walkToOrnament } from '../three/Walk'
+
+const startOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
 
 const Hand = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11V5a2 2 0 0 1 4 0v6" /><path d="M13 10.5V9a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15a2 2 0 0 1 3.3-2.2L9 15" /></svg>
 const Arrow = ({ d }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
@@ -103,14 +107,14 @@ function Chip() {
 
 function Greeting({ brand, onShare }) {
   const s = useStore(), r = s.openResult
-  const restartOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
+  const restartOwn = startOwn
   if (s.view === 'send') return (
     <div className="finale on">
       <div className="greet"><div className="hc">Happy Christmas</div><div className="nm">from {s.myName}</div></div>
       <div className="foot">
         <p className="note">{brand.name} gives {amt(brand.per)} to {brand.charity.name} each time someone opens your card, up to {money(brand.cap)} in total.</p>
         <button type="button" className="btn primary" onClick={onShare}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></svg>Send to someone</button>
-        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Explore the tree</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
+        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Walk around the village</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
       </div>
     </div>)
   const msg = !r ? '' : r.counted ? null : r.reason === 'own' ? `This is your own card, so opening it here doesn't give. It gives when someone else opens it.`
@@ -122,7 +126,7 @@ function Greeting({ brand, onShare }) {
         {r?.counted ? <div className="gift"><span className="tile" /><p>Opening {s.from}'s card just gave <b>{amt(brand.per)}</b> to {brand.charity.name}, from {brand.name}. Their ornament is on the tree.</p></div>
           : <div className="gift muted"><span className="tile" /><p>{msg}</p></div>}
         <button type="button" className="btn primary" onClick={restartOwn}>Make your own ornament</button>
-        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Explore the tree</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
+        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Walk around the village</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
       </div>
     </div>)
 }
@@ -154,14 +158,17 @@ function ShareSheet({ link, brand, onClose }) {
 }
 
 function Explore({ brand }) {
-  const s = useStore(), [hint, setHint] = useState(true), [open, setOpen] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setHint(false), 5000); return () => clearTimeout(t) }, [])
+  const s = useStore(), [hint, setHint] = useState(true), [open, setOpen] = useState(false), walking = s.exploreMode === 'walk'
+  useEffect(() => { setHint(true); const t = setTimeout(() => setHint(false), 6000); return () => clearTimeout(t) }, [s.exploreMode])
   const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'send' ? s.myName : s.from, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
   const given = brand.opened * brand.per, pct = Math.min(100, given / brand.cap * 100)
   const rows = [...brand.extra.map(r => ({ n: r.n, when: 'just now', you: true })), ...crowd.list.slice().sort((a, b) => a.mins - b.mins).slice(0, 8).map(o => ({ n: o.name, when: ago(o.mins) }))].slice(0, 8)
   return (<>
-    <div className={'hint' + (hint ? '' : ' fade')}>Drag to look around · pinch to zoom · tap an ornament</div>
-    {s.heroHook >= 0 && s.view !== 'tree' && !fo && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
+    <div className={'hint' + (hint ? '' : ' fade')}>{walking ? 'Tap the ground to walk · drag to look · tap a sign to go there' : 'Drag to look around · pinch to zoom · tap an ornament'}</div>
+    {walking && <><PoiLabels /><Minimap /></>}
+    <button type="button" className="mode" onClick={() => useStore.setState({ exploreMode: walking ? 'orbit' : 'walk', poi: null, focus: null })}>{walking ? 'Tree view' : 'Walk around'}</button>
+    {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
+    {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
     {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'send' ? 'your ornament' : 'just now') : ago(fo.mins)} · gave {amt(brand.per)} to {brand.charity.name}</span></div>
       <button type="button" className="x" aria-label="Close" onClick={() => useStore.setState({ focus: null })}>×</button></div>}
     {s.view === 'tree' && !fo && <div className={'sheet' + (open ? '' : ' peek')}>
