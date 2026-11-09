@@ -38,7 +38,7 @@ npm run assets     # compress Blender exports in assets/raw/ → public/models/
 
 ## Database (Supabase)
 1. Vercel → giving-tree project → **Storage** → Create → **Supabase**, region **London (eu-west-2)**. This adds `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` to the project.
-2. Supabase → **SQL Editor** → paste and run `supabase/migrations/0001_giving_tree.sql`.
+2. Supabase → **SQL Editor** → paste and run `supabase/migrations/0001_giving_tree.sql`, then `0003_ornaments_after_first_gift.sql`.
 3. Supabase → Database → Extensions → enable **pg_cron**, then run `0002_purge_schedule.sql` (deletes wishes and emails on 1 Feb).
 4. Vercel → Settings → Environment Variables: add `DEVICE_SALT` (a long random string) and `PUBLIC_BASE_URL`. Redeploy.
 5. Go live: once the charity agreement is signed, run `update brands set agreement_signed_at = now(), status = 'live' where slug = 'mosaicads';`

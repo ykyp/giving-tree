@@ -45,8 +45,8 @@ export default function Overlay({ brand }) {
       </>}
       {(phase === 'settling') && <Chip />}
 
-      {(phase === 'greeting') && <Greeting brand={brand} onShare={() => setShare(s.createCard())} />}
-      {share && <ShareSheet link={share} brand={brand} onClose={() => setShare(null)} />}
+      {(phase === 'greeting') && <Greeting brand={brand} onShare={async () => { try { setShare(await s.createCard()) } catch (e) { s.toastMsg(e.message || 'Could not make your card. Try again.') } }} />}
+      {share && <ShareSheet card={share} brand={brand} onClose={() => setShare(null)} />}
       {phase === 'explore' && <Explore brand={brand} />}
       <Labels />
       <Toast />
@@ -121,7 +121,7 @@ function Greeting({ brand, onShare }) {
         <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Walk around the village</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
       </div>
     </div>)
-  const msg = !r ? '' : r.counted ? null : r.reason === 'own' ? `This is your own card, so opening it here doesn't give. It gives when someone else opens it.`
+  const msg = !r ? '' : r.counted ? null : r.reason === 'not_live' ? `${brand.name}'s tree isn't collecting gifts yet. Your ornament is on the tree all the same.` : r.reason === 'error' ? `We couldn't reach the tree just now. Your ornament is safe; try opening the card again later.` : r.reason === 'own' ? `This is your own card, so opening it here doesn't give. It gives when someone else opens it.`
     : r.reason === 'cap' ? `${brand.name}'s pot is complete. Thank you: all ${money(brand.cap)} has gone to ${brand.charity.name}.` : `This card has already given from this phone. Make your own and start the next gift.`
   return (
     <div className="finale on">
@@ -135,8 +135,8 @@ function Greeting({ brand, onShare }) {
     </div>)
 }
 
-function ShareSheet({ link, brand, onClose }) {
-  const s = useStore(), cv = useRef()
+function ShareSheet({ card, brand, onClose }) {
+  const s = useStore(), cv = useRef(), link = card.url
   useEffect(() => { const c = shared.snapshot?.(); const x = cv.current?.getContext('2d'); if (!x) return
     x.fillStyle = '#0a1030'; x.fillRect(0, 0, 600, 314); if (c) x.drawImage(c, 0, 0, 600, 314)
     const g = x.createLinearGradient(0, 170, 0, 314); g.addColorStop(0, 'rgba(5,8,25,0)'); g.addColorStop(1, 'rgba(5,8,25,.85)'); x.fillStyle = g; x.fillRect(0, 0, 600, 314)
@@ -155,7 +155,12 @@ function ShareSheet({ link, brand, onClose }) {
           <div className="msg">{s.myName} hung an ornament for you 🎄 <span className="u">{link}</span></div><div className="time">✓✓</div>
         </div></div>
         <div className="btnrow"><button type="button" className="btn primary" onClick={tryShare}>Share</button><button type="button" className="btn ghost" onClick={copy}>Copy link</button></div>
-        <button type="button" className="btn text" onClick={() => { useStore.setState({ from: s.myName, view: 'open' }); useStore.getState().restart('open') }}>See what they'll see →</button>
+        {card.christmasUrl && <div className="xmas">
+          <b>Your Christmas link</b>
+          <p>Wishes people leave you open on 25 December. Keep this link to come back for them.</p>
+          <div className="btnrow"><button type="button" className="btn ghost" onClick={() => addToCalendar(card.christmasUrl)}>Add to calendar</button><button type="button" className="btn ghost" onClick={() => { try { navigator.clipboard.writeText(card.christmasUrl).then(() => s.toastMsg('Christmas link copied')) } catch (e) { s.toastMsg(card.christmasUrl) } }}>Copy it</button></div>
+        </div>}
+        <button type="button" className="btn text" onClick={() => { if (card.id) { location.href = `/c/${card.id}`; return } useStore.setState({ from: s.myName, view: 'open' }); useStore.getState().restart('open') }}>See what they'll see →</button>
       </div>
     </div>
   )
@@ -227,4 +232,11 @@ function Coach() {
   useEffect(() => { if (!show) return; let raf; const loop = () => { raf = requestAnimationFrame(loop); if (shared.walk?.target) { setShow(false); try { localStorage.setItem('gt3-walked', '1') } catch (e) {} } }; loop(); return () => cancelAnimationFrame(raf) }, [show])
   if (!show) return null
   return <div className="coach" aria-hidden="true"><span className="coach-ring" /><span className="coach-hand"><Hand /></span><span className="coach-t">Tap the snow to walk there</span></div>
+}
+
+/** A calendar event on 25 December, 09:00 local, with the Christmas link. No data leaves the phone. */
+function addToCalendar(url) {
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MosaicAds//Giving Tree//EN', 'BEGIN:VEVENT', `UID:${Date.now()}@giving-tree`, 'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z',
+    'DTSTART:20261225T090000', 'DTEND:20261225T091500', 'SUMMARY:Open your Christmas wishes 🎁', `DESCRIPTION:Your wishes are ready: ${url}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n')
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'christmas-wishes.ics'; document.body.appendChild(a); a.click(); a.remove()
 }

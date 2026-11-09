@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { NAMES } from '../config'
 import { seeded, hashStr, now, easeOut } from '../lib/util'
 import { shared } from './shared'
+import { api } from '../lib/api'
 import { DESIGNS, crowdMats, tagMatAtlas, tagGeo, capGeo, capMat, cellUV, drawCell, TAG_DESIGNS, mosaicColors, mosaicGeo } from './ornamentKit'
 
 /* ---------- rope physics (verlet): a rope only pulls when it is taut ---------- */
@@ -28,6 +29,7 @@ function makeOrn(name, design, color, cell, hook, r, mins) {
   return { id: crowd.nextId++, name, design, color, cell, hook, mins, ph: r() * 6.28, dir: r() < .5 ? -1 : 1, L: 0.16 + r() * 0.08, bob: null, prev: null, dropAt: 0, fs: undefined }
 }
 export function populate(brand) {
+  if (api.online && api.ornaments) return populateReal(brand, api.ornaments)
   crowd.list = []; const r = seeded(hashStr(brand.slug) % 100000 + 3), hooks = shared.hooks.map((_, i) => i).sort(() => r() - .5)
   const n = Math.min(MAXO - 6, Math.floor(shared.hooks.length * 0.66))
   for (let k = 0; k < n; k++) {
@@ -36,15 +38,28 @@ export function populate(brand) {
   }
   crowd.dirty = true
 }
-/** A gift arriving live: the ornament drops from above onto a free hook and swings. */
-export function addLive(brand) {
+/** Real ornaments from the database: each keeps the hook its sender chose when that hook is free. */
+function populateReal(brand, rows) {
+  crowd.list = []; const used = new Set(), r = seeded(7), mins = d => Math.max(0, Math.round((Date.now() - Date.parse(d)) / 6e4))
+  const free = () => { const f = shared.hooks.map((_, i) => i).filter(i => !used.has(i)); return f.length ? f[Math.floor(r() * f.length)] : -1 }
+  rows.slice(0, MAXO - 6).forEach((row, k) => {
+    let hook = Number.isInteger(row.hook) && row.hook >= 0 && row.hook < shared.hooks.length && !used.has(row.hook) ? row.hook : free(); if (hook < 0) return; used.add(hook)
+    const o = makeOrn(row.sender_name, row.design, brand.palette[hashStr(row.id) % brand.palette.length], 8 + k, hook, r, mins(row.created_at)); o.cardId = row.id
+    crowd.list.push(o); drawCell(o.cell, o.design, o.color, o.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
+  })
+  crowd.dirty = true
+}
+/** A gift arriving live: the ornament drops from above onto a free hook and swings. `real` = an ornament row from the database. */
+export function addLive(brand, real) {
+  if (real && crowd.list.some(o => o.cardId === real.id)) return null
   let free = freeHooks(), hook, cell
   const cells = usedCells(); for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
   if (!free.length || cell === undefined || crowd.list.length >= MAXO) { const old = crowd.list.reduce((a, o) => o.mins > a.mins ? o : a, crowd.list[0]); crowd.list = crowd.list.filter(o => o !== old); hook = old.hook; cell = old.cell }
   else hook = free[Math.floor(Math.random() * free.length)]
   crowd.list.forEach(o => o.mins += 1)
-  const name = NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
-  const o = makeOrn(name, Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0)
+  const name = real ? real.sender_name : NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
+  if (real && Number.isInteger(real.hook) && free.includes(real.hook)) hook = real.hook
+  const o = makeOrn(name, real ? real.design : Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0); if (real) o.cardId = real.id
   const A = shared.hooks[hook].p; o.bob = A.clone().add(new THREE.Vector3((r() - .5) * .8, 3.5, (r() - .5) * .8)); o.prev = o.bob.clone(); o.dropAt = now()
   drawCell(cell, o.design, o.color, name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
   crowd.list.push(o); crowd.dirty = true; return o
@@ -79,7 +94,8 @@ export default function Crowd({ brand }) {
   const caps = useMemo(() => { const m = new THREE.InstancedMesh(capGeo, capMat, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
   const threads = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXO * 6), 3)); const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcaa65a, transparent: true, opacity: .8 })); l.frustumCulled = false; return l }, [])
 
-  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color); populate(brand) }, [brand, meshes])
+  const online = useStore(s => s.online), treeRev = useStore(s => s.treeRev)
+  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color); populate(brand) }, [brand, meshes, online, treeRev])
 
   function rebuild() {
     meshes.forEach(m => m.userData.list = [])

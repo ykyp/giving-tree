@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { BRANDS, NAMES } from './config'
 import { hashStr, now } from './lib/util'
+import { api, createCard as apiCreateCard, openCard } from './lib/api'
 
 // ---- simulated server rules (the live site does these in /api/open) ----
 const DEV = { created: new Set(), opened: new Set() }
@@ -24,7 +25,7 @@ export const useStore = create((set, get) => ({
   heroHook: -1, openResult: null,
   live: true, sound: true, tier: 'auto', fps: 60,
   focus: null, poi: null, exploreMode: 'walk', toast: null, toastAt: 0, sheetOpen: false, linkPreview: null,
-  tick: 0,
+  tick: 0, online: false, cardId: null, myCard: null, treeRev: 0,
 
   brand: () => BRANDS[get().brandKey],
   setPhase: phase => set({ phase, phaseAt: now() }),
@@ -38,9 +39,25 @@ export const useStore = create((set, get) => ({
     for (let i = 0; i < name.length; i++) if (name[i] !== s.myName[i] || t[i] === undefined) t[i] = n
     t.length = name.length; return { myName: name, engraveTimes: t }
   }),
-  createCard: () => { const s = get(); DEV.created.add(cardKey(s.brandKey, s.myName)); saveDev(); return `https://christmas.mosaicads.ai/c/${cardId(s.brandKey, s.myName)}` },
-  tryOpen: () => {
-    const s = get(), b = BRANDS[s.brandKey], k = cardKey(b.slug, s.from)
+  createCard: async () => {
+    const s = get()
+    if (api.online) {
+      if (s.myCard && s.myCard.run === s.run) return s.myCard
+      const c = await apiCreateCard({ brand: s.brandKey, name: s.myName, design: s.design, hook: s.heroHook >= 0 ? s.heroHook : null })
+      const my = { id: c.id, url: c.url, christmasUrl: c.christmasUrl, run: s.run }
+      try { const all = JSON.parse(localStorage.getItem('gt3-mycards') || '[]'); all.push({ id: c.id, token: c.ownerToken, brand: s.brandKey, name: s.myName }); localStorage.setItem('gt3-mycards', JSON.stringify(all)) } catch (e) {}
+      set({ myCard: my }); return my
+    }
+    DEV.created.add(cardKey(s.brandKey, s.myName)); saveDev(); return { url: `https://christmas.mosaicads.ai/c/${cardId(s.brandKey, s.myName)}` } },
+  tryOpen: async () => {
+    const s = get(), b = BRANDS[s.brandKey]
+    if (api.online && s.cardId) {
+      let r
+      try { r = await openCard(s.cardId) } catch (e) { r = { counted: false, reason: 'error' } }
+      if (r.counted) { b.opened = Math.round(r.given_pence / r.amount_pence); b.extra.unshift({ n: s.from, you: true }) }
+      set(st => ({ openResult: r, tick: st.tick + 1 })); return r
+    }
+    const k = cardKey(b.slug, s.from)
     let r
     if (DEV.created.has(k)) r = { counted: false, reason: 'own' }
     else if (DEV.opened.has(k)) r = { counted: false, reason: 'again' }

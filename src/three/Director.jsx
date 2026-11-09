@@ -21,7 +21,7 @@ export default function Director() {
     if (a && t - s.phaseAt > a[0]) s.setPhase(a[1](s))
     if (t > nextLive.current) { nextLive.current = t + 4 + Math.random() * 4.5
       const b = BRANDS[s.brandKey]
-      if (s.live && !document.hidden && (s.phase === 'greeting' || s.phase === 'explore') && b.opened * b.per < b.cap) {
+      if (!s.online && s.live && !document.hidden && (s.phase === 'greeting' || s.phase === 'explore') && b.opened * b.per < b.cap) {
         b.opened++; const o = addLive(b); if (s.phase === 'explore') s.toastMsg(`${o.name}'s card just gave ${b.per < 100 ? b.per + 'p' : '£' + b.per / 100}`); s.bump(); chime([1568], 0, .04) } }
   })
   return null

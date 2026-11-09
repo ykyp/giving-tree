@@ -169,3 +169,9 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 .zoom{position:absolute;right:12px;top:calc(46% + 58px);z-index:4;display:flex;flex-direction:column;border-radius:23px;overflow:hidden;border:1px solid rgba(255,255,255,.22);background:rgba(10,14,36,.55);backdrop-filter:blur(6px)}
 .zoom button{width:46px;height:42px;border:0;background:none;color:var(--ink);font:inherit;font-size:22px;line-height:1;cursor:pointer}
 .zoom button+button{border-top:1px solid rgba(255,255,255,.15)}
+
+.xmas{border:1px solid rgba(242,196,109,.35);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:rgba(26,20,10,.35)}
+.xmas b{font-family:var(--f-display);font-weight:400;font-size:22px}.xmas p{margin:0;font-size:13.5px;color:#cfd4e6}
+/* Live site: full-screen app, no prototype panel */
+body.app{padding:0}body.app .wrap{display:block;max-width:none}body.app .notes{display:none}
+body.app .phone{max-width:none;width:100vw;height:100dvh;min-height:0;border:0;border-radius:0;box-shadow:none}
