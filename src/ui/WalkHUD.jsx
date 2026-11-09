@@ -23,7 +23,7 @@ export function PoiLabels() {
         let behind = false; if (p.id !== 'tree') { const ax = cam.position.x, az = cam.position.z, bx = p.at[0] - ax, bz = p.at[2] - az, L2 = bx * bx + bz * bz, u = Math.max(0, Math.min(1, -(ax * bx + az * bz) / L2)); behind = u > 0 && u < 1 && Math.hypot(ax + bx * u, az + bz * u) < 4.2 }
         const show = !behind && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && dist > 2.5 && dist < 75 && cur !== p.id
         d.style.opacity = show ? String(Math.min(1, (75 - dist) / 20)) : '0'; d.style.pointerEvents = show ? 'auto' : 'none'
-        if (show) { const sc = Math.max(.74, Math.min(1, 14 / dist + .55)); d.style.transform = `translate(${(v.x * .5 + .5) * r.width}px,${(-v.y * .5 + .5) * r.height}px) translate(-50%,-100%) scale(${sc})`
+        if (show) { const sc = Math.max(.74, Math.min(1, 14 / dist + .55)); d.style.transform = `translate(${(v.x * .5 + .5) * r.width}px,${Math.max(112, (-v.y * .5 + .5) * r.height)}px) translate(-50%,-100%) scale(${sc})`
           const m = d.querySelector('.poi-d'); const txt = `${Math.round(dist)} m`; if (m.textContent !== txt) m.textContent = txt } } }
     loop(); return () => cancelAnimationFrame(raf) }, [])
   return <div className="poi-layer" ref={host}>{POIS.map(p =>

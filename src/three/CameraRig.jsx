@@ -10,15 +10,15 @@ import { crowd } from './Crowd'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 /* Fly-in: rooftops → down the lane → under the arch → into the square (spline, like the Diwali card's arrival). */
-const FLY = new THREE.CatmullRomCurve3([V(6, 30, 118), V(2, 19, 92), V(-1, 8.5, 70), V(1, 3.6, 50), V(0, 3.0, 33), V(0, 3.8, 30), V(0, 5.4, 25)], false, 'centripetal')
-const FLY_LOOK = new THREE.CatmullRomCurve3([V(0, 10, 70), V(0, 6, 52), V(0, 4.5, 30), V(0, 5.5, 12), V(0, 6.8, 0)], false, 'centripetal')
+const FLY = new THREE.CatmullRomCurve3([V(6, 30, 132), V(2, 19, 110), V(-1, 8, 88), V(.5, 3.6, 64), V(0, 3.4, 46)], false, 'centripetal')
+const FLY_LOOK = new THREE.CatmullRomCurve3([V(0, 10, 84), V(0, 6, 64), V(0, 5, 40), V(0, 6.2, 0)], false, 'centripetal')
 export const FLY_DUR = 10.5
 
 function shotFor(phase, s, t) {
   const k = t - s.phaseAt
   switch (phase) {
-    case 'dark': return [V(0, 5.4, 25), V(0, 6.9, 0), 1.5]
-    case 'lighting': return [V(-15, 2.6, 16), V(0, 7.6, 0), 4.6]
+    case 'dark': return [V(0, 3.4, 46), V(0, 6.2, 0), 1.5]
+    case 'lighting': return k < 2.4 ? [V(0, 3, 23), V(0, 7, 0), 2.4] : [V(-14, 2.6, 15), V(0, 7.6, 0), 2.2]
     case 'choose': return [V(0, 3.5, 13.9), V(0, .75, CRATE[2]), 2.6]
     case 'engrave': return [V(0, 1.95, 11.2), V(0, 1.28, HELD[2]), 1.8]
     case 'gift': return [V(-1.2, 2.5, 11.7), V(0, .6, CRATE[2]), 2.6]
@@ -28,7 +28,7 @@ function shotFor(phase, s, t) {
     case 'crown': return [V(0, 13, 19), V(0, 14.4, 0), 2.2]
     case 'crowning': return k < 2.4 ? [V(0, 13, 19), V(0, 14.4, 0), 2.2] : [V(0, 3.2, 22.5), V(0, 10.2, 0), 4.2]
     case 'greeting': { const a = (t - s.phaseAt) * .03; return [V(Math.sin(a) * 22.5, 3.2, Math.cos(a) * 22.5), V(0, 10.2, 0), 4.2] }
-    default: return [V(0, 5.4, 25), V(0, 6.9, 0), 1.5]
+    default: return [V(0, 3.4, 46), V(0, 6.2, 0), 1.5]
   }
 }
 // interpolate around the tree's axis so moves arc round it instead of cutting through it
@@ -56,15 +56,15 @@ export default function CameraRig() {
     } else {
       const [p, l, dur] = shotFor(s.phase, s, t)
       // crowning has two legs: restart the move at the pull-back
-      if (s.phase === 'crowning' && t - s.phaseAt >= 2.4 && !rig.leg2) { rig.leg2 = true; rig.from = rig.pos.clone(); rig.fromLook = rig.look.clone(); rig.t0 = t }
-      if (s.phase !== 'crowning') rig.leg2 = false
+      if ((s.phase === 'crowning' || s.phase === 'lighting') && t - s.phaseAt >= 2.4 && !rig.leg2) { rig.leg2 = true; rig.from = rig.pos.clone(); rig.fromLook = rig.look.clone(); rig.t0 = t }
+      if (s.phase !== 'crowning' && s.phase !== 'lighting') rig.leg2 = false
       const e = reduceMotion ? 1 : ease((t - rig.t0) / dur)
       cylLerp(rig.pos, rig.from || p, p, e); rig.look.lerpVectors(rig.fromLook || l, l, e)
     }
     camera.position.copy(rig.pos)
     if (!reduceMotion) { camera.position.x += Math.sin(t * .31) * .03; camera.position.y += Math.sin(t * .43) * .025 } // hand-held drift
     camera.lookAt(rig.look)
-    const wide = s.phase === 'greeting' || (s.phase === 'crowning' && t - s.phaseAt >= 2.4), fov = wide ? 56 : 40
+    const wide = s.phase === 'greeting' || (s.phase === 'crowning' && t - s.phaseAt >= 2.4), lane = s.phase === 'arrival' || s.phase === 'dark' || (s.phase === 'lighting' && t - s.phaseAt < 2.4), fov = wide ? 56 : lane ? 50 : 40
     if (Math.abs(camera.fov - fov) > .02) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 1.6); camera.updateProjectionMatrix() }
   })
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RoundedBoxGeometry } from 'three-stdlib'
 import { useStore } from '../store'
@@ -74,19 +74,46 @@ function sparkle(mat, density = .9925, strength = 2.2) {
   mat.customProgramCacheKey = () => 'sparkle' + density
   return mat
 }
+/** Tileable value noise: lattice of period P cells, sampled in lattice units (wraps seamlessly every P). */
+function tileNoise(seed, P) {
+  const r = seeded(seed), g = new Float32Array(P * P); for (let i = 0; i < g.length; i++) g[i] = r()
+  const at = (x, y) => g[(((y % P) + P) % P) * P + (((x % P) + P) % P)]
+  return (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf)
+    return (at(xi, yi) * (1 - u) + at(xi + 1, yi) * u) * (1 - v) + (at(xi, yi + 1) * (1 - u) + at(xi + 1, yi + 1) * u) * v }
+}
+/** Seamless height field (S×S) from several octaves + per-pixel grain. */
+function heightField(S, seed, octs, grain) {
+  const ns = octs.map(([P], k) => tileNoise(seed + k * 31, P)), h = new Float32Array(S * S), r = seeded(seed + 99)
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { let v = 0; octs.forEach(([P, a], k) => { v += ns[k](i * P / S, j * P / S) * a }); h[j * S + i] = v + (r() - .5) * grain }
+  return h
+}
+/** Normal map texture from a height field (wrapping Sobel). */
+function normalTex(h, S, strength, repeat) {
+  const c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'), img = x.createImageData(S, S), d = img.data
+  const H = (i, j) => h[((j + S) % S) * S + ((i + S) % S)]
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const dx = (H(i + 1, j) - H(i - 1, j)) * strength, dy = (H(i, j + 1) - H(i, j - 1)) * strength, l = Math.hypot(dx, dy, 1), k = (j * S + i) * 4
+    d[k] = (-dx / l * .5 + .5) * 255; d[k + 1] = (dy / l * .5 + .5) * 255; d[k + 2] = (1 / l * .5 + .5) * 255; d[k + 3] = 255 }
+  x.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); t.anisotropy = 16; return t
+}
+/** Colour texture from a height field: snow is near-white; dips go a little bluer, crests a little warmer. */
+function snowColTex(h, S, base, depth, repeat, extra) {
+  const c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'), img = x.createImageData(S, S), d = img.data
+  let lo = 1e9, hi = -1e9; for (const v of h) { lo = Math.min(lo, v); hi = Math.max(hi, v) }
+  for (let k = 0; k < S * S; k++) { const t = (h[k] - lo) / (hi - lo), sh = 1 - depth * (1 - t)
+    d[k * 4] = base[0] * sh * (1 - .025 * (1 - t)); d[k * 4 + 1] = base[1] * sh; d[k * 4 + 2] = Math.min(255, base[2] * (sh + .02 * (1 - t))); d[k * 4 + 3] = 255 }
+  x.putImageData(img, 0, 0); if (extra) extra(x, S)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); t.anisotropy = 16; return t
+}
 export function Ground() {
-  const { snowMat, geo, trod } = useMemo(() => {
+  const { snowMat, geo, trod, trodN } = useMemo(() => {
     const nz = valueNoise(13)
-    // snow surface: soft blue-white with wind-blown streaks; normal-ish detail through a bump map
-    const col = canvasTex(1024, 1024, (x, w) => { x.fillStyle = '#f2f5fb'; x.fillRect(0, 0, w, w)
-      const img = x.getImageData(0, 0, w, w), d = img.data
-      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 64, j / 64), m = nz(i / 9 + 50, j / 30), v = .94 + n * .06, k = (j * w + i) * 4
-        d[k] = 228 * v; d[k + 1] = 234 * v; d[k + 2] = 246 * Math.min(1.04, v + .03) }
-      x.putImageData(img, 0, 0) }, [26, 26])
-    const bump = canvasTex(512, 512, (x, w) => { const img = x.createImageData(w, w), d = img.data
-      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const v = (nz(i / 14, j / 14) * .6 + nz(i / 3.5 + 9, j / 3.5) * .4) * 255, k = (j * w + i) * 4; d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255 }
-      x.putImageData(img, 0, 0) }, [70, 70])
-    const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, bumpMap: bump, bumpScale: .7, roughness: .78, envMapIntensity: .35, color: 0xf4f7ff }))
+    // deep snow: wind-smoothed undulation (large) + crystalline grain (fine), carried mostly by the normal map
+    const S = 512
+    const macro = heightField(S, 5, [[3, .6], [6, .3], [12, .1]], 0)
+    const fine = heightField(S, 11, [[16, .45], [32, .3], [64, .15]], .22)
+    const col = snowColTex(macro, S, [240, 244, 251], .07, [12, 12])
+    const nrm = normalTex(fine, S, 2.2, [150, 150])
+    const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, normalMap: nrm, normalScale: new THREE.Vector2(.55, .55), roughness: .86, envMapIntensity: .3, color: 0xffffff }), .993, 1.8)
     // displaced terrain: flat where you walk, rising into soft drifts beyond
     const geo = new THREE.PlaneGeometry(420, 420, 230, 230); geo.rotateX(-Math.PI / 2)
     const pos = geo.attributes.position
@@ -95,20 +122,21 @@ export function Ground() {
       if (e > 30) h += Math.min(1, (e - 30) / 40) * nz(x / 30, z / 30) * 3.5
       pos.setY(i, h - .02); pos.setZ(i, z) }
     geo.computeVertexNormals()
-    // trodden snow over cobbles: packed, slightly grey, with bare wet patches and footprint scuffs
-    const trod = canvasTex(1024, 1024, (x, w) => { const r = seeded(9); x.fillStyle = '#5d6070'; x.fillRect(0, 0, w, w)
-      for (let y = 0; y < 32; y++) for (let i = 0; i < 32; i++) { const v = 105 + r() * 45; x.fillStyle = `rgb(${v},${v},${v + 10})`; x.beginPath(); x.roundRect(i * 32 + (y % 2) * 16 + 2, y * 32 + 2, 28, 28, 9); x.fill() }
-      const img = x.getImageData(0, 0, w, w), d = img.data
-      for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const n = nz(i / 70 + 5, j / 70 + 5) * .75 + nz(i / 12, j / 12) * .25, k = (j * w + i) * 4
-        const cover = Math.min(1, Math.max(0, (n - .26) * 3.2)) * .92 + .08, sv = 222 + nz(i / 6, j / 6) * 22
-        d[k] = d[k] * (1 - cover) + sv * .96 * cover; d[k + 1] = d[k + 1] * (1 - cover) + sv * .98 * cover; d[k + 2] = d[k + 2] * (1 - cover) + sv * 1.04 * cover }
-      x.putImageData(img, 0, 0)
-      x.fillStyle = 'rgba(160,168,190,.16)'; for (let i = 0; i < 110; i++) { const px = r() * w, py = r() * w, a = r() * 6.28; for (let k = 0; k < 6; k++) { x.beginPath(); x.ellipse(px + Math.cos(a) * k * 22 + (k % 2) * 9, py + Math.sin(a) * k * 22, 5, 9, a, 0, 7); x.fill() } } }, [9, 9])
-    return { snowMat, geo, trod }
+    // packed snow on the paths: same white, a touch greyer, compressed into footprint trails (no bare cobbles)
+    const ph = heightField(S, 23, [[4, .5], [8, .3], [24, .2]], .12)
+    const fr = seeded(41)
+    for (let n = 0; n < 70; n++) { let px = fr() * S, py = fr() * S; const a = fr() * 6.28
+      for (let k = 0; k < 8; k++) { const fx = px + Math.cos(a) * k * 26 + Math.cos(a + 1.57) * (k % 2 ? 7 : -7), fy = py + Math.sin(a) * k * 26 + Math.sin(a + 1.57) * (k % 2 ? 7 : -7)
+        for (let dj = -10; dj <= 10; dj++) for (let di = -10; di <= 10; di++) { const lx = di * Math.cos(-a) - dj * Math.sin(-a), ly = di * Math.sin(-a) + dj * Math.cos(-a), q = (lx / 9) ** 2 + (ly / 4.5) ** 2
+          if (q < 1) { const ix = (((Math.round(fx) + di) % S) + S) % S, iy = (((Math.round(fy) + dj) % S) + S) % S; ph[iy * S + ix] -= .22 * (1 - q) } } } }
+    const trod = snowColTex(ph, S, [226, 231, 241], .12, [1, 1])
+    const trodN = normalTex(ph, S, 3, [1, 1])
+    return { snowMat, geo, trod, trodN }
   }, [])
   // one material per surface so each gets a texture repeat matching its real size (≈5 m per tile)
-  const trodMat = useMemo(() => { const mk = (rx, rz) => { const t = trod.clone(); t.needsUpdate = true; t.repeat.set(rx, rz); return sparkle(new THREE.MeshStandardMaterial({ map: t, roughness: .55, metalness: 0, envMapIntensity: .6 }), .997, 1.4) }
-    return { sq: mk(9, 9), lane: mk(8.4 / 5.3, 92 / 5.3), back: mk(8.4 / 5.3, 42 / 5.3) } }, [trod])
+  const trodMat = useMemo(() => { const mk = (rx, rz) => { const t = trod.clone(), n = trodN.clone(); t.needsUpdate = n.needsUpdate = true; t.repeat.set(rx, rz); n.repeat.set(rx, rz)
+      return sparkle(new THREE.MeshStandardMaterial({ map: t, normalMap: n, normalScale: new THREE.Vector2(.6, .6), roughness: .7, metalness: 0, envMapIntensity: .4 }), .996, 1.4) }
+    return { sq: mk(9, 9), lane: mk(8.4 / 5.3, 92 / 5.3), back: mk(8.4 / 5.3, 42 / 5.3) } }, [trod, trodN])
   const edgeRing = useMemo(() => { const g = new THREE.RingGeometry(SQUARE_R - 1.4, SQUARE_R + .4, 96, 1); g.rotateX(-Math.PI / 2); return g }, [])
   return (<group>
     <mesh geometry={geo} material={snowMat} />
@@ -204,12 +232,13 @@ export function Village({ brand }) {
     return { body, roof, chim, wins, winMat, doorG, wreath, post, head, headMat, pineA, pineS, glPts, glMat, smokePts, icicles, piles, chimCap, plinth, step, porch, porchUnder, lantern }
   }, [])
 
+  const [fontsIn, setFontsIn] = useState(0)
+  useEffect(() => { document.fonts?.load('112px "Great Vibes"').then(() => setFontsIn(1)).catch(() => {}) }, [])
   const banner = useMemo(() => canvasTex(1024, 192, (x, w, h) => {
     x.fillStyle = '#7d1020'; x.fillRect(0, 0, w, h); x.strokeStyle = '#e8c46a'; x.lineWidth = 8; x.strokeRect(10, 10, w - 20, h - 20)
     x.fillStyle = '#ffe3ad'; x.textAlign = 'center'; x.textBaseline = 'middle'
-    if (view === 'open') { x.font = '86px "Great Vibes", cursive'; x.fillText(`${from} sent you something`, w / 2, h / 2 + 6) }
-    else { x.font = '84px "Great Vibes", cursive'; x.fillText(`${brand.name} · Christmas Square`, w / 2, h / 2 + 6) }
-  }), [brand, view, from])
+    x.font = '112px "Great Vibes", cursive'; x.fillText('Merry Christmas', w / 2, h / 2 + 8)
+  }), [fontsIn])
   const archCurve = useMemo(() => new THREE.QuadraticBezierCurve3(V(-4.6, 6, 21), V(0, 8.6, 21), V(4.6, 6, 21)), [])
   const archLights = useMemo(() => { const pts = archCurve.getPoints(40); const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().add(V(0, .05, .3)))); return g }, [archCurve])
   const smoke = useRef()
@@ -233,7 +262,7 @@ export function Village({ brand }) {
     </group>)}
     <mesh><tubeGeometry args={[archCurve, 40, .42, 10, false]} /><meshStandardMaterial color={0x1f5a35} roughness={1} /></mesh>
     <points geometry={archLights}><pointsMaterial map={glow} color={0xffd08a} size={.7} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
-    <mesh position={[0, 5.15, 21.1]}><planeGeometry args={[8, 1.5]} /><meshStandardMaterial map={banner} roughness={.8} side={THREE.DoubleSide} emissive={'#ffffff'} emissiveMap={banner} emissiveIntensity={.25} /></mesh>
+    <mesh position={[0, 5.3, 21.1]}><planeGeometry args={[6.4, 1.2]} /><meshStandardMaterial map={banner} roughness={.8} side={THREE.DoubleSide} emissive={'#ffffff'} emissiveMap={banner} emissiveIntensity={.25} /></mesh>
     <Church /><Hills /><Stalls /><Benches /><Rink /><Carousel /><Birds />
     <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch /><LightPools /><Mist />
   </group>)
@@ -472,7 +501,7 @@ function LightPools() {
 /* Low drifting mist at the edges of the village: soft billboards hugging the snow, kept out of the square's centre. */
 function Mist() {
   const { group, mats } = useMemo(() => {
-    const tex = canvasTex(256, 128, (x, w, h) => { const g = x.createRadialGradient(w / 2, h * .62, 4, w / 2, h * .62, w / 2); g.addColorStop(0, 'rgba(210,220,245,.55)'); g.addColorStop(1, 'rgba(210,220,245,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h) })
+    const tex = canvasTex(256, 128, (x, w, h) => { x.translate(w / 2, h / 2); x.scale(1, .45); const g = x.createRadialGradient(0, 0, 2, 0, 0, w * .46); g.addColorStop(0, 'rgba(210,220,245,.5)'); g.addColorStop(.6, 'rgba(210,220,245,.18)'); g.addColorStop(1, 'rgba(210,220,245,0)'); x.fillStyle = g; x.fillRect(-w, -h * 2, w * 2, h * 4) })
     const r = seeded(77), group = new THREE.Group(), mats = []
     for (let i = 0; i < 26; i++) {
       const a = r() * Math.PI * 2, R = 21 + r() * 9; let x = Math.cos(a) * R, z = Math.sin(a) * R
