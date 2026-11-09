@@ -7,7 +7,7 @@ export const shared = window.__shared = {
   hooks: [],            // [{p, n, y}] hang points on the tree
   hookHi: -1,           // hook under the dragged ornament
   heroPos: new THREE.Vector3(), heroVisible: false, heroBody: new THREE.Vector3(),
-  dragging: false, hangAz: 0,
+  dragging: false, hangAz: 0, hangY: 6.6, hangR: 21, hangS: { az: 0, y: 6.6, r: 21 }, orbiting: null,
   crowdWorld: [],       // [{id, name, design, mins, wp, hook, you}]
   focusPos: null, focusHook: -1,
   snapshot: null,       // fn(name) -> dataURL of the hero close-up

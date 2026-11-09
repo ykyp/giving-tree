@@ -150,14 +150,14 @@ export default function Tree({ tier, brand }) {
   const starGeo = useMemo(() => { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? .22 : .55; const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? s.lineTo(x, y) : s.moveTo(x, y) } s.closePath()
     const g = new THREE.ExtrudeGeometry(s, { depth: .1, bevelEnabled: true, bevelThickness: .06, bevelSize: .045, bevelSegments: 3 }); g.center(); return g }, [])
 
-  useFrame(({ size, gl }) => {
+  useFrame(({ size, gl, camera }) => {
     const t = now(), L = litLevel(), st = useStore.getState()
     needleMat.userData.uTime.value = t; needleMat.emissiveIntensity = L * 0.05
     lights.mat.uniforms.uTime.value = t; lights.mat.uniforms.uLight.value = L * 1.04; lights.mat.uniforms.uScale.value = size.height * gl.getPixelRatio()
     const n = Math.floor(L * N); if (n !== lights.lastN) { lights.lastN = n; const c = new THREE.Color()
       for (let i = 0; i < N; i++) { if (i < n) c.setRGB(lights.C[i * 3] * 1.6, lights.C[i * 3 + 1] * 1.3, lights.C[i * 3 + 2] * .9); else c.setRGB(.08, .07, .06); lights.bulbs.setColorAt(i, c) }
       lights.bulbs.instanceColor.needsUpdate = true }
-    if (halo.current) halo.current.material.opacity = L * 0.22
+    if (halo.current) { halo.current.material.opacity = L * 0.22; const c = camera.position, l = Math.hypot(c.x, c.z) || 1; halo.current.position.set(-c.x / l * 6, 6.6, -c.z / l * 6) }
     // star: floats above the tree in 'crown', drops onto the top in 'crowning', sits there afterwards
     const ph = st.phase, show = ['crown', 'crowning', 'greeting', 'explore'].includes(ph)
     if (topper.current) { topper.current.visible = show

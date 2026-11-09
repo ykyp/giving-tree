@@ -368,7 +368,10 @@ export function Snow({ tier }) {
 
 export function Lights() {
   const a = useRef(), b = useRef(), c = useRef(), d = useRef()
-  useFrame(({ scene }) => { const L = litLevel(); if (a.current) { a.current.intensity = L * 9; b.current.intensity = L * 7; c.current.intensity = L * 6; d.current.intensity = L * 14 } scene.environmentIntensity = .35 + .75 * L })
+  const base = useMemo(() => [V(.4, 3, 1.8), V(-.5, 6, 1.2), V(0, 1.6, 4.5)], [])
+  useFrame(({ scene, camera }) => { const L = litLevel()
+    if (a.current && Math.hypot(camera.position.x, camera.position.z) < 30) { const az = Math.atan2(camera.position.x, camera.position.z); [a, b, c].forEach((r, i) => r.current.position.copy(base[i]).applyAxisAngle(V(0, 1, 0), az)) }
+    if (a.current) { a.current.intensity = L * 9; b.current.intensity = L * 7; c.current.intensity = L * 6; d.current.intensity = L * 14 } scene.environmentIntensity = .35 + .75 * L })
   return (<group>
     <hemisphereLight args={[0x8899dd, 0x2b2238, .75]} />
     <directionalLight color={0xc8d6ff} intensity={1.05} position={[-30, 40, 24]} />

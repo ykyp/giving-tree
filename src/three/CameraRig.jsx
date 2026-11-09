@@ -23,7 +23,7 @@ function shotFor(phase, s, t) {
     case 'engrave': return [V(0, 1.95, 11.2), V(0, 1.28, HELD[2]), 1.8]
     case 'gift': return [V(-1.2, 2.5, 11.7), V(0, .6, CRATE[2]), 2.6]
     case 'unwrap': return [V(.5, 2.2, 11.2), V(0, 1.5, 7.6), 2]
-    case 'hang': { const az = shared.hangAz; return [V(Math.sin(az) * 21, 6.6, Math.cos(az) * 21), V(0, 5.8, 0), 2] }
+    case 'hang': { const h = shared.hangS; return [V(Math.sin(h.az) * h.r, h.y, Math.cos(h.az) * h.r), V(0, Math.max(2.2, h.y - .8 - (21 - h.r) * .05), 0), 2] }
     case 'settling': { const h = shared.hooks[s.heroHook] || shared.hooks[0]; return [h.p.clone().addScaledVector(h.n, 3.1).add(V(0, .55, 0)), h.p.clone().add(V(0, -.35, 0)), 1.6] }
     case 'crown': return [V(0, 13, 19), V(0, 14.4, 0), 2.2]
     case 'crowning': return k < 2.4 ? [V(0, 13, 19), V(0, 14.4, 0), 2.2] : [V(0, 3.2, 22.5), V(0, 10.2, 0), 4.2]
@@ -50,6 +50,7 @@ export default function CameraRig() {
 
   useFrame((_, dt) => {
     const s = useStore.getState(), t = now()
+    { const h = shared.hangS, k = Math.min(1, dt * 7); h.az += (shared.hangAz - h.az) * k; h.y += (shared.hangY - h.y) * k; h.r += (shared.hangR - h.r) * k }
     if (s.phase === 'explore') { rig.pos.copy(camera.position); if (controls.current) controls.current.getTarget(rig.look); else { const d = V(0, 0, 0); camera.getWorldDirection(d); rig.look.copy(camera.position).addScaledVector(d, 10) } return }
     if (s.phase === 'arrival') {
       const e = reduceMotion ? 1 : ease((t - s.phaseAt) / FLY_DUR); FLY.getPoint(e, rig.pos); FLY_LOOK.getPoint(e, rig.look)

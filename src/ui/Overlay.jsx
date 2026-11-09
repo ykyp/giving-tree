@@ -36,6 +36,9 @@ export default function Overlay({ brand }) {
       {phase === 'engrave' && <Engrave />}
       {phase === 'hang' && <>
         <div className="pill"><Hand />{view === 'send' ? 'Drag your ornament onto a glowing hook' : `Drag ${s.from}'s ornament onto the tree`}</div>
+        <div className="turn-hint">Drag the tree to walk round it · pinch to zoom</div>
+        <button type="button" className="turn l" aria-label="Turn left around the tree" onClick={() => { shared.hangAz += .7 }}><Arrow d="m15 18-6-6 6-6" /></button>
+        <button type="button" className="turn r" aria-label="Turn right around the tree" onClick={() => { shared.hangAz -= .7 }}><Arrow d="m9 18 6-6-6-6" /></button>
         <div className="drag-hint" aria-hidden="true" />
         {autoBtn && <button type="button" className="btn ghost auto" onClick={() => { ensure(); useStore.setState({ autoHang: true }) }}>Auto-hang it for me</button>}
       </>}

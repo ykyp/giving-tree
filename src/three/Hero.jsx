@@ -119,29 +119,40 @@ export default function Hero({ brand }) {
   const ndc = useMemo(() => new THREE.Vector2(), [])
 
   // reset per run
-  useEffect(() => { o.bob = null; o.prev = null; st8.auto = null; st8.drag = false; shared.dragging = false; shared.hookHi = -1; st8.pos.set(CRATE[0], CRATE[1] + .6, CRATE[2]); st8.scale = .9 }, [run])
+  useEffect(() => { shared.hangAz = 0; shared.hangY = 6.6; shared.hangR = 21; Object.assign(shared.hangS, { az: 0, y: 6.6, r: 21 }); o.bob = null; o.prev = null; st8.auto = null; st8.drag = false; shared.dragging = false; shared.hookHi = -1; st8.pos.set(CRATE[0], CRATE[1] + .6, CRATE[2]); st8.scale = .9 }, [run])
 
   // pointer handling for drag-and-drop (raycast against a shell hugging the tree)
   useEffect(() => {
     const el = gl.domElement
     const toNdc = e => { const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); return r }
+    // pointers: grab the ornament to hang it; drag anywhere else to circle the tree; pinch / scroll to zoom
+    const ptrs = new Map(); let pinch0 = 0, r0 = 21
     const down = e => {
       if (useStore.getState().phase !== 'hang' || st8.auto) return
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); r0 = shared.hangR; shared.orbiting = null; return }
       const r = toNdc(e), p = st8.pos.clone().project(camera)
       const d = Math.hypot((p.x - ndc.x) * r.width / 2, (p.y - ndc.y) * r.height / 2)
-      if (d < 110) { st8.drag = true; shared.dragging = true; el.setPointerCapture?.(e.pointerId); move(e); chime([880], 0, .05) }
+      el.setPointerCapture?.(e.pointerId)
+      if (d < 110) { st8.drag = true; shared.dragging = true; move(e); chime([880], 0, .05) }
+      else shared.orbiting = { x: e.clientX, y: e.clientY }
     }
     const move = e => {
+      const pp = ptrs.get(e.pointerId); if (pp) { pp.x = e.clientX; pp.y = e.clientY }
+      if (ptrs.size === 2 && !st8.drag) { const [a, b] = [...ptrs.values()]; shared.hangR = clamp(r0 * pinch0 / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), 9, 25); return }
+      if (shared.orbiting) { const dx = e.clientX - shared.orbiting.x, dy = e.clientY - shared.orbiting.y; shared.orbiting = { x: e.clientX, y: e.clientY }
+        shared.hangAz -= dx * .008; shared.hangY = clamp(shared.hangY + dy * .03, 2.2, 13); return }
       if (!st8.drag) return; toNdc(e); ray.setFromCamera(ndc, camera)
       const hit = ray.intersectObject(shell, false)[0]
       if (hit) { const n = V(hit.point.x, 0, hit.point.z).normalize(); st8.target.copy(hit.point).addScaledVector(n, .35).add(V(0, -.1, 0)) }
       else { plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(V()).negate(), V(0, 6, 4)); ray.ray.intersectPlane(plane, st8.target) }
       shared.edge = Math.abs(ndc.x) > .78 ? Math.sign(ndc.x) : 0
     }
-    const up = () => { if (!st8.drag) return; st8.drag = false; shared.dragging = false; shared.edge = 0
+    const wheel = e => { if (useStore.getState().phase !== 'hang') return; e.preventDefault(); shared.hangR = clamp(shared.hangR * (1 + e.deltaY * .0012), 9, 25) }
+    const up = e => { ptrs.delete(e.pointerId); shared.orbiting = null; if (!st8.drag) return; st8.drag = false; shared.dragging = false; shared.edge = 0
       if (shared.hookHi >= 0) attach(shared.hookHi); else chime([440], 0, .04) }
-    el.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
-    return () => { el.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    el.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); el.addEventListener('wheel', wheel, { passive: false })
+    return () => { el.removeEventListener('wheel', wheel); window.removeEventListener('pointercancel', up); el.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
   }, [gl, camera])
 
   function attach(i) {
@@ -193,7 +204,7 @@ export default function Hero({ brand }) {
           pr.copy(h.p).project(camera); const d = Math.hypot((pr.x - ndc.x) * W, (pr.y - ndc.y) * H); if (d < bd) { bd = d; best = i } }
         if (best >= 0) { const h = shared.hooks[best]; st8.target.copy(h.p).addScaledVector(h.n, .25).add(V(0, -.2, 0)) } }
       shared.hookHi = st8.drag ? best : -1
-      if (shared.edge) shared.hangAz = clamp(shared.hangAz + shared.edge * dt * .7, -1.3, 1.3)
+      if (shared.edge) shared.hangAz -= shared.edge * dt * .8
     } else if (s.heroHook >= 0) { hung = true }
 
     if (hung) {
