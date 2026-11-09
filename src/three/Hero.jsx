@@ -126,31 +126,54 @@ export default function Hero({ brand }) {
     const el = gl.domElement
     const toNdc = e => { const r = el.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); return r }
     // pointers: grab the ornament to hang it; drag anywhere else to circle the tree; pinch / scroll to zoom
-    const ptrs = new Map(); let pinch0 = 0, r0 = 21
+    // Gestures while hanging:
+    //  · one finger on the ornament → drag it to a hook (a second finger can pinch-zoom at the same time)
+    //  · one finger elsewhere → circle the tree (sideways) and move up/down it (vertical)
+    //  · two fingers → pinch to zoom in/out (trackpad pinch and the mouse wheel do the same)
+    //  · double-tap the tree → zoom in to that spot; double-tap again → back out
+    const ptrs = new Map(); let pinch0 = 0, r0 = 21, dragId = null, lastTap = { t: 0, x: 0, y: 0 }, downAt = null
+    const minR = () => Rsil(clamp(shared.hangY - .8, TREE.base, TREE.top)) + 3.8
+    const setR = r => { shared.hangR = clamp(r, minR(), 26) }
     const down = e => {
       if (useStore.getState().phase !== 'hang' || st8.auto) return
-      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { el.setPointerCapture?.(e.pointerId) } catch (_) {}
       if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); r0 = shared.hangR; shared.orbiting = null; return }
+      if (ptrs.size > 2) return
+      downAt = { t: performance.now(), x: e.clientX, y: e.clientY }
       const r = toNdc(e), p = st8.pos.clone().project(camera)
       const d = Math.hypot((p.x - ndc.x) * r.width / 2, (p.y - ndc.y) * r.height / 2)
-      el.setPointerCapture?.(e.pointerId)
-      if (d < 110) { st8.drag = true; shared.dragging = true; move(e); chime([880], 0, .05) }
+      if (d < 110) { st8.drag = true; dragId = e.pointerId; shared.dragging = true; move(e); chime([880], 0, .05) }
       else shared.orbiting = { x: e.clientX, y: e.clientY }
     }
     const move = e => {
       const pp = ptrs.get(e.pointerId); if (pp) { pp.x = e.clientX; pp.y = e.clientY }
-      if (ptrs.size === 2 && !st8.drag) { const [a, b] = [...ptrs.values()]; shared.hangR = clamp(r0 * pinch0 / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), 9, 25); return }
+      if (ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; setR(r0 * pinch0 / Math.max(1, Math.hypot(a.x - b.x, a.y - b.y))); if (e.pointerId !== dragId) return }
       if (shared.orbiting) { const dx = e.clientX - shared.orbiting.x, dy = e.clientY - shared.orbiting.y; shared.orbiting = { x: e.clientX, y: e.clientY }
-        shared.hangAz -= dx * .008; shared.hangY = clamp(shared.hangY + dy * .03, 2.2, 13); return }
-      if (!st8.drag) return; toNdc(e); ray.setFromCamera(ndc, camera)
+        const k = shared.hangR / 21 // slower turning when you are zoomed in close
+        shared.hangAz -= dx * .008 * k; shared.hangY = clamp(shared.hangY + dy * .03 * k, 2.2, 13); setR(shared.hangR); return }
+      if (!st8.drag || e.pointerId !== dragId) return; toNdc(e); ray.setFromCamera(ndc, camera)
       const hit = ray.intersectObject(shell, false)[0]
       if (hit) { const n = V(hit.point.x, 0, hit.point.z).normalize(); st8.target.copy(hit.point).addScaledVector(n, .35).add(V(0, -.1, 0)) }
       else { plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(V()).negate(), V(0, 6, 4)); ray.ray.intersectPlane(plane, st8.target) }
       shared.edge = Math.abs(ndc.x) > .78 ? Math.sign(ndc.x) : 0
     }
-    const wheel = e => { if (useStore.getState().phase !== 'hang') return; e.preventDefault(); shared.hangR = clamp(shared.hangR * (1 + e.deltaY * .0012), 9, 25) }
-    const up = e => { ptrs.delete(e.pointerId); shared.orbiting = null; if (!st8.drag) return; st8.drag = false; shared.dragging = false; shared.edge = 0
+    const wheel = e => { if (useStore.getState().phase !== 'hang') return; e.preventDefault(); setR(shared.hangR * (1 + e.deltaY * (e.ctrlKey ? .01 : .0012))) }
+    const up = e => {
+      const had = ptrs.delete(e.pointerId); const wasOrbit = !!shared.orbiting
+      if (ptrs.size === 1) { const [q] = [...ptrs.values()]; if (!st8.drag) shared.orbiting = { x: q.x, y: q.y } } else shared.orbiting = null
+      // double-tap (on the tree, not the ornament) zooms in to that height, or back out if already close
+      if (had && wasOrbit && ptrs.size === 0 && downAt && performance.now() - downAt.t < 260 && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 10) {
+        const now2 = performance.now()
+        if (now2 - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+          toNdc(e); ray.setFromCamera(ndc, camera); const hit = ray.intersectObject(shell, false)[0]
+          if (shared.hangR > minR() + 3) { if (hit) shared.hangY = clamp(hit.point.y + .6, 2.2, 13); setR(minR() + .3) } else { shared.hangR = 21 }
+          chime([1175], 0, .04); lastTap.t = 0
+        } else lastTap = { t: now2, x: e.clientX, y: e.clientY }
+      }
+      if (e.pointerId !== dragId) return
+      dragId = null; if (!st8.drag) return; st8.drag = false; shared.dragging = false; shared.edge = 0
       if (shared.hookHi >= 0) attach(shared.hookHi); else chime([440], 0, .04) }
+    shared.zoomBy = f => setR(shared.hangR * f)
     el.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); el.addEventListener('wheel', wheel, { passive: false })
     return () => { el.removeEventListener('wheel', wheel); window.removeEventListener('pointercancel', up); el.removeEventListener('pointerdown', down); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
   }, [gl, camera])
@@ -195,7 +218,7 @@ export default function Hero({ brand }) {
         st8.pos.set(0, 0, 0).addScaledVector(a.from, (1 - e) ** 2).addScaledVector(mid, 2 * e * (1 - e)).addScaledVector(a.to, e * e); if (e >= 1) { const i = a.i; st8.auto = null; attach(i) } }
       else if (st8.drag) st8.pos.lerp(st8.target, .35)
       else { // rest at the "hand" position, low in the frame
-        const hand = V(0, -.22, .5).unproject(camera).sub(camera.position).normalize().multiplyScalar(7).add(camera.position); st8.pos.lerp(hand, .12) }
+        const hand = V(0, -.22, .5).unproject(camera).sub(camera.position).normalize().multiplyScalar(clamp(shared.hangS.r - Rsil(clamp(shared.hangS.y, TREE.base, TREE.top)) - 1.4, 2.4, 7)).add(camera.position); st8.pos.lerp(hand, .12) }
       st8.scale += (1.15 - st8.scale) * .1; st8.spin = t * .7
       // nearest free hook
       let best = -1

@@ -36,7 +36,8 @@ export default function Overlay({ brand }) {
       {phase === 'engrave' && <Engrave />}
       {phase === 'hang' && <>
         <div className="pill"><Hand />{view === 'send' ? 'Drag your ornament onto a glowing hook' : `Drag ${s.from}'s ornament onto the tree`}</div>
-        <div className="turn-hint">Drag the tree to walk round it · pinch to zoom</div>
+        <div className="turn-hint">Drag to go round · pinch or double-tap to zoom</div>
+        <div className="zoom"><button type="button" aria-label="Zoom in" onClick={() => shared.zoomBy?.(.75)}>+</button><button type="button" aria-label="Zoom out" onClick={() => shared.zoomBy?.(1.33)}>−</button></div>
         <button type="button" className="turn l" aria-label="Turn left around the tree" onClick={() => { shared.hangAz += .7 }}><Arrow d="m15 18-6-6 6-6" /></button>
         <button type="button" className="turn r" aria-label="Turn right around the tree" onClick={() => { shared.hangAz -= .7 }}><Arrow d="m9 18 6-6-6-6" /></button>
         <div className="drag-hint" aria-hidden="true" />
@@ -167,7 +168,7 @@ function Explore({ brand }) {
   const given = brand.opened * brand.per, pct = Math.min(100, given / brand.cap * 100)
   const rows = [...brand.extra.map(r => ({ n: r.n, when: 'just now', you: true })), ...crowd.list.slice().sort((a, b) => a.mins - b.mins).slice(0, 8).map(o => ({ n: o.name, when: ago(o.mins) }))].slice(0, 8)
   return (<>
-    <div className={'hint' + (hint ? '' : ' fade')}>{walking ? 'Tap the ground to walk · drag to look · tap a sign to go there' : 'Drag to look around · pinch to zoom · tap an ornament'}</div>
+    <div className={'hint' + (hint ? '' : ' fade')}>{walking ? 'Tap to walk · drag to look · pinch to zoom · tap a sign to go there' : 'Drag to look around · pinch to zoom · tap an ornament'}</div>
     {walking && <><PoiLabels /><Minimap /></>}
     {walking && <Coach />}
     <button type="button" className="mode" onClick={() => useStore.setState({ exploreMode: walking ? 'orbit' : 'walk', poi: null, focus: null })}>{walking ? 'Tree view' : 'Walk around'}</button>

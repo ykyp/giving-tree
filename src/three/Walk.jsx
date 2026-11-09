@@ -11,10 +11,11 @@ import { POIS, walkable, collide, clampTarget } from './village'
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
 const EYE = 1.62
 /** Walking state, shared with the minimap and labels. Forward = (−sin yaw, 0, −cos yaw). */
-export const walk = shared.walk = { pos: V(0, 0, 9), yaw: 0, pitch: -.06, target: null, poi: null, look: null, speed: 0, lastDrag: -9, phase: 0, enter: 0, from: null, stuck: 0, marker: V(), markerT: -9 }
+export const walk = shared.walk = { zoom: 1, zoomS: 1, pinchedAt: -9, pos: V(0, 0, 9), yaw: 0, pitch: -.06, target: null, poi: null, look: null, speed: 0, lastDrag: -9, phase: 0, enter: 0, from: null, stuck: 0, marker: V(), markerT: -9 }
 const angDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a))
 
 export function walkTo(x, z, poiId = null) {
+  walk.zoom = 1
   const t = clampTarget(walk.pos, { x, z }); walk.target = V(t.x, 0, t.z); walk.poi = poiId; walk.look = null; walk.stuck = 0
   walk.marker.set(t.x, .04, t.z); walk.markerT = now(); useStore.setState({ poi: null })
 }
@@ -45,13 +46,19 @@ export default function Walk() {
 
   // drag to look around
   useEffect(() => {
-    const el = gl.domElement; let down = null, moved = 0
-    const pd = e => { down = { x: e.clientX, y: e.clientY }; moved = 0 }
-    const pm = e => { if (!down) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; down = { x: e.clientX, y: e.clientY }; moved += Math.abs(dx) + Math.abs(dy)
-      if (moved > 6) { walk.yaw += dx * .0055; walk.pitch = clamp(walk.pitch + dy * .0045, -.6, .55); walk.lastDrag = now(); walk.look = null } }
-    const pu = () => { down = null }
-    el.addEventListener('pointerdown', pd); window.addEventListener('pointermove', pm); window.addEventListener('pointerup', pu)
-    return () => { el.removeEventListener('pointerdown', pd); window.removeEventListener('pointermove', pm); window.removeEventListener('pointerup', pu) }
+    // one finger: look around · two fingers: pinch to zoom the view (like binoculars) · wheel / trackpad pinch: same
+    const el = gl.domElement, ptrs = new Map(); let down = null, moved = 0, pinch0 = 0, z0 = 1
+    const pd = e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); z0 = walk.zoom; down = null; return }
+      down = { x: e.clientX, y: e.clientY }; moved = 0 }
+    const pm = e => { const p = ptrs.get(e.pointerId); if (p) { p.x = e.clientX; p.y = e.clientY }
+      if (ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; walk.zoom = clamp(z0 * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch0), 1, 3.2); walk.pinchedAt = now(); return }
+      if (!down) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; down = { x: e.clientX, y: e.clientY }; moved += Math.abs(dx) + Math.abs(dy)
+      if (moved > 6) { const k = 1 / walk.zoom; walk.yaw += dx * .0055 * k; walk.pitch = clamp(walk.pitch + dy * .0045 * k, -.6, .55); walk.lastDrag = now(); walk.look = null } }
+    const pu = e => { ptrs.delete(e.pointerId); if (ptrs.size === 0) down = null; else if (ptrs.size === 1) { const [q] = [...ptrs.values()]; down = { x: q.x, y: q.y }; moved = 99 } }
+    const wh = e => { e.preventDefault(); walk.zoom = clamp(walk.zoom * (1 - e.deltaY * (e.ctrlKey ? .01 : .0015)), 1, 3.2); walk.pinchedAt = now() }
+    el.addEventListener('pointerdown', pd); window.addEventListener('pointermove', pm); window.addEventListener('pointerup', pu); window.addEventListener('pointercancel', pu); el.addEventListener('wheel', wh, { passive: false })
+    return () => { el.removeEventListener('pointerdown', pd); window.removeEventListener('pointermove', pm); window.removeEventListener('pointerup', pu); window.removeEventListener('pointercancel', pu); el.removeEventListener('wheel', wh) }
   }, [gl])
 
   // focusing an ornament while walking: walk up to it
@@ -88,11 +95,12 @@ export default function Walk() {
     if (k < 1 && walk.from) { camera.position.lerpVectors(walk.from.p, p, k); camera.quaternion.slerpQuaternions(walk.from.q, q, k) }
     else { camera.position.copy(p); camera.quaternion.copy(q) }
     // a walking eye needs a wider lens than the cinematic shots, especially on a tall phone screen
-    const fov = 40 + 22 * k; if (Math.abs(camera.fov - fov) > .01) { camera.fov = fov; camera.updateProjectionMatrix() }
+    walk.zoomS += (walk.zoom - walk.zoomS) * Math.min(1, dt * 8)
+    const fov = (40 + 22 * k) / walk.zoomS; if (Math.abs(camera.fov - fov) > .01) { camera.fov = fov; camera.updateProjectionMatrix() }
     if (ring.current) { const a = t - walk.markerT; ring.current.visible = a < 1.4; ring.current.position.copy(walk.marker); ring.current.scale.setScalar(.6 + a * .6); ring.current.material.opacity = Math.max(0, .9 - a * .65) }
   })
 
-  const onGround = e => { if (e.delta > 8) return; e.stopPropagation(); walkTo(e.point.x, e.point.z) }
+  const onGround = e => { if (e.delta > 8 || now() - walk.pinchedAt < .5) return; e.stopPropagation(); walkTo(e.point.x, e.point.z) }
   return (<group>
     <mesh rotation-x={-Math.PI / 2} position={[0, .03, 20]} onClick={onGround}><planeGeometry args={[120, 220]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>
     {POIS.filter(p => p.id !== 'arch').map(p => <mesh key={p.id} position={[p.look[0], 1.5, p.look[2]]} onClick={e => { if (e.delta > 8) return; e.stopPropagation(); walkToPoi(p.id) }}>
