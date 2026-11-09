@@ -166,6 +166,7 @@ function Explore({ brand }) {
   return (<>
     <div className={'hint' + (hint ? '' : ' fade')}>{walking ? 'Tap the ground to walk · drag to look · tap a sign to go there' : 'Drag to look around · pinch to zoom · tap an ornament'}</div>
     {walking && <><PoiLabels /><Minimap /></>}
+    {walking && <Coach />}
     <button type="button" className="mode" onClick={() => useStore.setState({ exploreMode: walking ? 'orbit' : 'walk', poi: null, focus: null })}>{walking ? 'Tree view' : 'Walk around'}</button>
     {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
     {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
@@ -214,4 +215,12 @@ function Toast() {
   const toast = useStore(s => s.toast), at = useStore(s => s.toastAt), [on, setOn] = useState(false)
   useEffect(() => { if (!toast) return; setOn(true); const t = setTimeout(() => setOn(false), 2500); return () => clearTimeout(t) }, [toast, at])
   return <div className={'toast' + (on ? ' on' : '')} role="status"><span className="tt" />{toast}</div>
+}
+
+/** First time someone walks: a pulsing hand on the snow until their first step. */
+function Coach() {
+  const [show, setShow] = useState(() => { try { return !localStorage.getItem('gt3-walked') } catch (e) { return true } })
+  useEffect(() => { if (!show) return; let raf; const loop = () => { raf = requestAnimationFrame(loop); if (shared.walk?.target) { setShow(false); try { localStorage.setItem('gt3-walked', '1') } catch (e) {} } }; loop(); return () => cancelAnimationFrame(raf) }, [show])
+  if (!show) return null
+  return <div className="coach" aria-hidden="true"><span className="coach-ring" /><span className="coach-hand"><Hand /></span><span className="coach-t">Tap the snow to walk there</span></div>
 }

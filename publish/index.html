@@ -158,6 +158,15 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 .poicard b{font-family:var(--f-display);font-weight:400;font-size:26px;line-height:1.1}
 .poicard p{margin:0;font-size:14px;color:#cfd4e6;line-height:1.45}
 
+.coach{position:absolute;left:50%;top:79%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:10px}
+.coach-ring{position:absolute;top:-6px;width:60px;height:22px;border-radius:50%;border:2px solid rgba(255,214,143,.9);animation:cring 1.6s ease-out infinite}
+.coach-hand{width:34px;height:34px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));animation:chand 1.6s ease-in-out infinite}
+.coach-hand svg{width:34px;height:34px}
+.coach-t{white-space:nowrap;margin-top:4px;font-size:13px;font-weight:600;color:#fff;background:rgba(10,14,36,.7);padding:6px 12px;border-radius:999px;backdrop-filter:blur(6px)}
+@keyframes cring{0%{transform:scale(.4);opacity:0}30%{opacity:1}100%{transform:scale(1.6);opacity:0}}
+@keyframes chand{0%,100%{transform:translateY(0)}40%{transform:translateY(8px)}}
+@media (prefers-reduced-motion:reduce){.coach-ring,.coach-hand{animation:none}}
+
 </style>
 <div id="root"></div>
 <script type="module" src="app.js"></script>

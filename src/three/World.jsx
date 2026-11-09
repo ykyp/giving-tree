@@ -142,6 +142,13 @@ export function Village({ brand }) {
       x.fillStyle = '#eef3fb'; x.beginPath(); x.ellipse(w / 2, h - 15, w * .55, 7, 0, Math.PI, 0); x.fill() })
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, color: 0x5a4630, toneMapped: false })
     const wins = new THREE.InstancedMesh(new THREE.PlaneGeometry(.9, 1.2), winMat, n * 8)
+    const stone = new THREE.MeshStandardMaterial({ color: 0x6d6a72, roughness: .95 })
+    const chimCap = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), stone, n)
+    const plinth = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), stone, n)
+    const step = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, .2, .7), stone, n)
+    const porch = new THREE.InstancedMesh(new THREE.CylinderGeometry(.62, .62, 1, 3, 1).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe6ecf6, roughness: .8 }), n)
+    const porchUnder = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x3b2a1e, roughness: .9 }), n)
+    const lantern = new THREE.InstancedMesh(new THREE.BoxGeometry(.18, .26, .18), undefined, n)
     const doorG = new THREE.InstancedMesh(new THREE.BoxGeometry(1.2, 2.2, .12), new THREE.MeshStandardMaterial({ color: 0x4a2c1c, roughness: .7 }), n)
     const wreath = new THREE.InstancedMesh(new THREE.TorusGeometry(.32, .1, 8, 18), new THREE.MeshStandardMaterial({ color: 0x1f5a35, roughness: .9 }), n)
     const smokePts = []
@@ -155,7 +162,14 @@ export function Village({ brand }) {
       const cols = Math.max(2, Math.floor(h.w / 2)), rows = h.h > 6 ? 2 : 1
       for (let ry = 0; ry < rows; ry++) for (let k = 0; k < cols; k++) { if (ry === 0 && k === Math.floor(cols / 2)) continue; if (r() < .18) continue
         o.position.set((-.5 + (k + .5) / cols) * h.w, 1.6 + ry * 2.6, h.d / 2 + .02); o.scale.set(1, 1, 1); o.updateMatrix(); wins.setMatrixAt(wi++, m4.multiplyMatrices(base, o.matrix)) }
-      o.position.set(((Math.floor(cols / 2) + .5) / cols - .5) * h.w, 1.1, h.d / 2 + .04); o.updateMatrix(); doorG.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      const dx = ((Math.floor(cols / 2) + .5) / cols - .5) * h.w
+      o.position.set(dx, 1.1, h.d / 2 + .04); o.updateMatrix(); doorG.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(cx, h.h + 1.95, -h.d * .15); o.scale.set(.9, .14, .9); o.updateMatrix(); chimCap.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(0, 0, 0); o.scale.set(h.w + .08, .55, h.d + .08); o.updateMatrix(); plinth.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(dx, .1, h.d / 2 + .38); o.scale.set(1, 1, 1); o.updateMatrix(); step.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(dx, 2.62, h.d / 2 + .42); o.scale.set(2, .55, .9); o.updateMatrix(); porch.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(dx, 2.45, h.d / 2 + .42); o.scale.set(1.9, .1, .85); o.updateMatrix(); porchUnder.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
+      o.position.set(dx + .95, 1.95, h.d / 2 + .14); o.scale.set(1, 1, 1); o.updateMatrix(); lantern.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
       o.position.y = 1.6; o.position.z = h.d / 2 + .14; o.scale.set(1, 1, 1); o.updateMatrix(); wreath.setMatrixAt(i, m4.multiplyMatrices(base, o.matrix))
       // fairy lights along the eave, icicles below them, snow banked by the walls
       for (let k = 0; k <= 14; k++) { const ex = (-.5 + k / 14) * h.w * 1.06; eave.push([...V(ex, h.h - .02 + Math.sin(k / 14 * Math.PI) * -.06, h.d * .57).applyMatrix4(base).toArray(), 4 + (i + k) % 3]) }
@@ -185,8 +199,9 @@ export function Village({ brand }) {
       vertexShader: 'attribute float aS; uniform float uL,uScale,uTime; varying vec3 vC; varying float vA; void main(){ vC=color; vA=(.25+.75*uL)*(.85+.15*sin(uTime*2.+position.x)); vec4 mv=modelViewMatrix*vec4(position,1.); gl_PointSize=min(uScale*.09*aS/-mv.z, uScale*.05); gl_Position=projectionMatrix*mv; }',
       fragmentShader: 'uniform sampler2D uMap; varying vec3 vC; varying float vA; void main(){ gl_FragColor=vec4(vC*texture2D(uMap,gl_PointCoord).a*vA,1.); }' })
     const glPts = new THREE.Points(gg, glMat); glPts.frustumCulled = false
-    ;[body, roof, chim, wins, doorG, wreath, post, head, pineA, pineS, icicles, piles].forEach(m => { m.frustumCulled = false })
-    return { body, roof, chim, wins, winMat, doorG, wreath, post, head, headMat, pineA, pineS, glPts, glMat, smokePts, icicles, piles }
+    lantern.material = headMat
+    ;[body, roof, chim, wins, doorG, wreath, post, head, pineA, pineS, icicles, piles, chimCap, plinth, step, porch, porchUnder, lantern].forEach(m => { m.frustumCulled = false })
+    return { body, roof, chim, wins, winMat, doorG, wreath, post, head, headMat, pineA, pineS, glPts, glMat, smokePts, icicles, piles, chimCap, plinth, step, porch, porchUnder, lantern }
   }, [])
 
   const banner = useMemo(() => canvasTex(1024, 192, (x, w, h) => {
@@ -209,7 +224,7 @@ export function Village({ brand }) {
   })
 
   return (<group>
-    {['body', 'roof', 'chim', 'wins', 'doorG', 'wreath', 'post', 'head', 'pineA', 'pineS', 'glPts', 'icicles', 'piles'].map(k => <primitive key={k} object={parts[k]} />)}
+    {['body', 'roof', 'chim', 'wins', 'doorG', 'wreath', 'post', 'head', 'pineA', 'pineS', 'glPts', 'icicles', 'piles', 'chimCap', 'plinth', 'step', 'porch', 'porchUnder', 'lantern'].map(k => <primitive key={k} object={parts[k]} />)}
     <group ref={smoke}>{Array.from({ length: Math.min(30, parts.smokePts.length * 3) }, (_, i) =>
       <sprite key={i}><spriteMaterial map={glow} color={0xc9d2e6} transparent opacity={.2} depthWrite={false} /></sprite>)}</group>
     {/* garland arch with the brand banner */}
@@ -220,7 +235,7 @@ export function Village({ brand }) {
     <points geometry={archLights}><pointsMaterial map={glow} color={0xffd08a} size={.7} transparent depthWrite={false} blending={THREE.AdditiveBlending} /></points>
     <mesh position={[0, 5.15, 21.1]}><planeGeometry args={[8, 1.5]} /><meshStandardMaterial map={banner} roughness={.8} side={THREE.DoubleSide} emissive={'#ffffff'} emissiveMap={banner} emissiveIntensity={.25} /></mesh>
     <Church /><Hills /><Stalls /><Benches /><Rink /><Carousel /><Birds />
-    <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch /><LightPools />
+    <Snowmen /><CandyCanes /><Fence /><Postbox /><Sleigh /><SquareLights /><BackArch /><LightPools /><Mist />
   </group>)
 }
 
@@ -452,4 +467,22 @@ function LightPools() {
   }, [])
   useFrame(() => { mat.opacity = .22 + .5 * litLevel() })
   return <primitive object={mesh} />
+}
+
+/* Low drifting mist at the edges of the village: soft billboards hugging the snow, kept out of the square's centre. */
+function Mist() {
+  const { group, mats } = useMemo(() => {
+    const tex = canvasTex(256, 128, (x, w, h) => { const g = x.createRadialGradient(w / 2, h * .62, 4, w / 2, h * .62, w / 2); g.addColorStop(0, 'rgba(210,220,245,.55)'); g.addColorStop(1, 'rgba(210,220,245,0)'); x.fillStyle = g; x.fillRect(0, 0, w, h) })
+    const r = seeded(77), group = new THREE.Group(), mats = []
+    for (let i = 0; i < 26; i++) {
+      const a = r() * Math.PI * 2, R = 21 + r() * 9; let x = Math.cos(a) * R, z = Math.sin(a) * R
+      if (i > 19) { x = (r() - .5) * 7; z = 30 + r() * 60 }
+      const m = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0, fog: true })
+      const sp = new THREE.Sprite(m); const sc = 10 + r() * 10; sp.scale.set(sc, sc * .32, 1); sp.position.set(x, sc * .1, z); sp.userData = { x, z, ph: r() * 6.28, sp: .15 + r() * .2 }
+      group.add(sp); mats.push(m)
+    }
+    return { group, mats }
+  }, [])
+  useFrame(() => { const t = now(); group.children.forEach(s => { const u = s.userData; s.position.x = u.x + Math.sin(t * u.sp + u.ph) * 1.6; s.material.opacity = .32 + Math.sin(t * u.sp * 1.3 + u.ph) * .12 }) })
+  return <primitive object={group} />
 }

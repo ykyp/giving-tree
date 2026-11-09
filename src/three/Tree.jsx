@@ -55,27 +55,39 @@ export default function Tree({ tier, brand }) {
     const m = new THREE.MeshStandardMaterial({ map: twigTexture(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: .8, envMapIntensity: .12, emissive: new THREE.Color(0xff9a40), emissiveIntensity: 0 })
     m.userData.uTime = { value: 0 }
     m.onBeforeCompile = sh => { sh.uniforms.uTime = m.userData.uTime
-      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <project_vertex>', `
-        vec4 mvPosition = vec4( transformed, 1.0 );
-        #ifdef USE_INSTANCING
-          mvPosition = instanceMatrix * mvPosition;
-        #endif
-        float rr = length(mvPosition.xz);
-        float sw = sin(uTime*1.1 + mvPosition.y*0.55 + mvPosition.x*0.3) * 0.018 * rr;
-        mvPosition.x += sw; mvPosition.z += sw*0.5; mvPosition.y += sin(uTime*1.7 + mvPosition.x)*0.006*rr;
-        mvPosition = modelViewMatrix * mvPosition;
-        gl_Position = projectionMatrix * mvPosition;
-        #ifdef USE_INSTANCING
-          vSnowN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;
-        #else
-          vSnowN = normalize(mat3(modelMatrix) * objectNormal).y;
-        #endif`).replace('#include <common>', '#include <common>\nvarying float vSnowN;')
-      // fresh snow resting on the upward-facing needles, thicker on the outer tips
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSnowN;')
+      const R = `(4.9 * pow(clamp(1. - (fy - ${TREE.base.toFixed(2)}) / ${(TREE.top - TREE.base).toFixed(2)}, 0., 1.), 1.08) + .08)`
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime; varying float vSnowN; varying float vAO;')
+        // volumetric foliage normals: every card faces outward-and-up from the trunk, so the crown lights as one mass
+        .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
+          vec4 wp0 = vec4(position, 1.);
+          vec3 n0 = objectNormal;
+          #ifdef USE_INSTANCING
+            wp0 = instanceMatrix * wp0; n0 = mat3(instanceMatrix) * objectNormal;
+          #endif
+          n0 = normalize(n0); vSnowN = n0.y;
+          float fy = wp0.y, rr0 = length(wp0.xz), Rr = ${R};
+          vec3 shellN = normalize(vec3(wp0.x, rr0 * .45 + .35, wp0.z));
+          transformedNormal = normalMatrix * normalize(mix(n0 * (n0.y < 0. ? -1. : 1.), shellN, .82));
+          vAO = mix(.28, 1., smoothstep(.2, .95, rr0 / Rr)) * mix(.8, 1., smoothstep(1., 4., fy));`)
+        .replace('#include <project_vertex>', `
+          vec4 mvPosition = vec4( transformed, 1.0 );
+          #ifdef USE_INSTANCING
+            mvPosition = instanceMatrix * mvPosition;
+          #endif
+          float rr = length(mvPosition.xz);
+          float sw = sin(uTime*1.1 + mvPosition.y*0.55 + mvPosition.x*0.3) * 0.018 * rr;
+          mvPosition.x += sw; mvPosition.z += sw*0.5; mvPosition.y += sin(uTime*1.7 + mvPosition.x)*0.006*rr;
+          mvPosition = modelViewMatrix * mvPosition;
+          gl_Position = projectionMatrix * mvPosition;`)
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vSnowN; varying float vAO;')
+        // keep the shell normal on back faces too (no flip), or half the cards go black
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n normal = normalize(vNormal);')
         .replace('#include <color_fragment>', `#include <color_fragment>
           { float ny = gl_FrontFacing ? vSnowN : -vSnowN; float lum = dot(diffuseColor.rgb, vec3(.3,.6,.1));
-            float snowAmt = smoothstep(.55, .95, ny) * smoothstep(.07, .2, lum) * .55;
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8,.86,1.), snowAmt); }`) }
+            float snowAmt = smoothstep(.55, .95, ny) * smoothstep(.07, .2, lum) * .5 * smoothstep(.55, .9, vAO);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.8,.86,1.), snowAmt) * vAO; }`) }
     m.customProgramCacheKey = () => 'needles'
     return m
   }, [])
