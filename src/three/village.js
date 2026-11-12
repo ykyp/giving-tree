@@ -25,8 +25,8 @@ function buildLayout() {
 export const LAYOUT = buildLayout()
 
 export const STALLS = [
-  { id: 'larkfield', x: -10.5, z: 9.5, a: 2.3, brand: 'larkfield', name: 'Larkfield Coffee', sell: 'Hot chocolate & coffee', sign: '#e0703f' },
-  { id: 'fernfield', x: -14, z: -3, a: 1.4, brand: 'fernfield', name: 'Fern & Field', sell: 'Wreaths & handmade gifts', sign: '#2f6b4f' },
+  { id: 'larkfield', x: -10.5, z: 9.5, a: 2.3, brand: null, name: 'Hot chocolate', sell: 'Hot chocolate & coffee', sign: '#e0703f' },
+  { id: 'fernfield', x: -14, z: -3, a: 1.4, brand: null, name: 'Wreaths & gifts', sell: 'Wreaths & handmade gifts', sign: '#2f6b4f' },
   { id: 'mulled', x: 13.4, z: 4.2, a: -1.88, brand: null, name: 'Mulled wine', sell: 'Spiced apple & mulled wine', sign: '#7d1020' },
 ]
 export const RINK = { x: -12, z: -9, r: 4.8 }, CAROUSEL = { x: 12.5, z: -9, r: 4.3 }, POSTBOX = { x: 6, z: 12.5 }

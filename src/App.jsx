@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { PerformanceMonitor } from '@react-three/drei'
 import { useStore } from './store'
-import { BRANDS } from './config'
+import { LOOK } from './config'
 import Tree from './three/Tree'
 import Crowd from './three/Crowd'
 import Hero from './three/Hero'
@@ -27,14 +27,15 @@ const hasWebGL2 = (() => { try { return !!document.createElement('canvas').getCo
 function WalkGate() { const on = useStore(s => s.phase === 'explore' && s.exploreMode === 'walk'); return on ? <Walk /> : null }
 
 export default function App() {
-  const brandKey = useStore(s => s.brandKey), tierPref = useStore(s => s.tier)
+  const tree = useStore(s => s.tree), tierPref = useStore(s => s.tier)
   const [autoTier, setAutoTier] = useState(detectTier)
   const tier = tierPref === 'auto' ? autoTier : tierPref
-  const brand = BRANDS[brandKey]
+  // how the scene is dressed. `per` is only set on a tree that has giving switched on.
+  const brand = useMemo(() => ({ ...LOOK, slug: tree.slug, name: tree.name, per: tree.giving?.perGift || null }), [tree.slug, tree.name, tree.giving?.perGift])
   useEffect(() => { document.documentElement.style.setProperty('--accent', brand.accent) }, [brand])
   useEffect(() => { useStore.getState().boot() }, [])
   // real card and Christmas links are the phone alone; the notes and controls are for the demo
-  const live = useStore(s => s.apiInfo && !s.apiInfo.devClock), solo = /^\/(c|me)\//.test(location.pathname) && live
+  const testMode = useStore(s => !!s.apiInfo?.testMode), solo = !testMode // the public site is the card and nothing else
   const dpr = tier === 'high' ? [1, 2] : tier === 'mid' ? [1, 1.5] : [1, 1]
   return (
     <div className={'wrap' + (solo ? ' solo' : '')}>
@@ -58,7 +59,7 @@ export default function App() {
               <Effects tier={tier} />
             </Suspense>
           </Canvas>
-        ) : <div className="nogl"><div><p className="nogl-t">3D isn’t available on this device</p><p className="sub">The live site shows the flat version of the card instead.</p></div></div>}
+        ) : <div className="nogl"><div><p className="nogl-t">3D isn’t available on this device</p><p className="sub">Try opening this link in another browser, or on a newer phone.</p></div></div>}
         <Overlay brand={brand} />
       </div>
     </div>

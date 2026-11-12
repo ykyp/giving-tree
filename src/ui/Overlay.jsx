@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store'
 import { BLOCK, DESIGN_META } from '../config'
-import { amt, money, ago } from '../lib/util'
+import { ago } from '../lib/util'
+import { copy as words, money } from '../../shared/copy.js'
 import { ensure, setSound, chime, bells } from '../lib/audio'
 import { Greeting, Meet, SealSelf, WishFor, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
 import { shared } from '../three/shared'
@@ -12,6 +13,8 @@ import { walkToOrnament } from '../three/Walk'
 
 const startOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, cardP: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
 
+/** The site's own mark: a small tree with a star. */
+const Mark = ({ big }) => <svg className={'mark' + (big ? ' big' : '')} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1 2.2 2.3.2-1.8 1.5.6 2.3L12 6.5 9.9 7.7l.6-2.3L8.7 3.9l2.3-.2z" fill="#f2c46d" /><path d="M12 7l5 6h-2.6l3.6 5H6l3.6-5H7z" fill="#2f7a4d" /><rect x="11" y="18" width="2" height="3.5" rx=".5" fill="#8a5a33" /></svg>
 const Hand = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11V5a2 2 0 0 1 4 0v6" /><path d="M13 10.5V9a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15a2 2 0 0 1 3.3-2.2L9 15" /></svg>
 const Arrow = ({ d }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 
@@ -68,13 +71,13 @@ export default function Overlay({ brand }) {
       <Toast />
       <div className="topbar">
         {phase === 'explore' && view !== 'tree' && view !== 'keepsake' && <button type="button" className="back" aria-label="Back" onClick={() => { useStore.setState({ focus: null }); s.setPhase(view === 'me' ? s.myHome() : 'greeting') }}><Arrow d="m15 18-6-6 6-6" /></button>}
-        <span className="brand">{brand.mono ? <span className="mono">{brand.mono}</span> : <span className="logo"><i /><i /><i /><i /></span>}{brand.name}</span>
+        <span className="brand"><Mark />{s.tree.name}</span>
         <button type="button" className="snd" aria-label={s.sound ? 'Turn sound off' : 'Turn sound on'} aria-pressed={s.sound} onClick={() => { useStore.setState({ sound: !s.sound }); setSound(!s.sound) }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H3v6h3l5 4z" /><path d={s.sound ? 'M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14' : 'm22 9-6 6m0-6 6 6'} /></svg></button>
       </div>
       <div className={'intro' + (intro && phase === 'arrival' ? '' : ' gone')}>
-        {brand.mono ? <span className="mono big">{brand.mono}</span> : <span className="logo big"><i /><i /><i /><i /></span>}
-        <div className="by">{brand.name}</div><div className="pr">presents</div><div className="bar"><i /></div>
+        <Mark big />
+        <div className="by">{s.tree.name}</div><div className="bar"><i /></div>
       </div>
     </>
   )
@@ -129,8 +132,8 @@ function Explore({ brand }) {
   const s = useStore(), [hint, setHint] = useState(true), [open, setOpen] = useState(false), walking = s.exploreMode === 'walk'
   useEffect(() => { setHint(true); const t = setTimeout(() => setHint(false), 6000); return () => clearTimeout(t) }, [s.exploreMode])
   const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'open' ? s.from : s.myName, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
-  const given = brand.opened * brand.per, pct = Math.min(100, given / brand.cap * 100)
-  const rows = [...brand.extra.map(r => ({ n: r.n, when: 'just now', you: true })), ...crowd.list.slice().sort((a, b) => a.mins - b.mins).slice(0, 8).map(o => ({ n: o.name, when: ago(o.mins) }))].slice(0, 8)
+  const g = s.tree.giving, pct = g ? Math.min(100, g.given / g.cap * 100) : 0, empty = s.counts.ornaments === 0
+  const rows = s.ornaments.slice(0, 8).map(o => ({ n: o.name, when: ago(Math.max(0, Math.round((Date.now() - o.at) / 60000))) }))
   return (<>
     <div className={'hint' + (hint ? '' : ' fade')}>{walking ? 'Tap to walk · drag to look · pinch to zoom · tap a sign to go there' : 'Drag to look around · pinch to zoom · tap an ornament'}</div>
     {walking && <><PoiLabels /><Minimap /></>}
@@ -138,19 +141,19 @@ function Explore({ brand }) {
     <button type="button" className="mode" onClick={() => useStore.setState({ exploreMode: walking ? 'orbit' : 'walk', poi: null, focus: null })}>{walking ? 'Tree view' : 'Walk around'}</button>
     {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
     {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
-    {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'open' ? 'just now' : 'your ornament') : ago(fo.mins)} · gave {amt(brand.per)} to {brand.charity.name}</span></div>
+    {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'open' ? 'just now' : 'your ornament') : `hung ${ago(fo.mins)}`}</span></div>
       <button type="button" className="x" aria-label="Close" onClick={() => useStore.setState({ focus: null })}>×</button></div>}
     {s.view === 'tree' && !fo && <div className={'sheet' + (open ? '' : ' peek')}>
-      <button type="button" className="grab" aria-expanded={open} onClick={() => setOpen(!open)}><span className="t1">{brand.title}</span><span className="t2">{money(given)} given · {brand.opened.toLocaleString('en-GB')} cards · {open ? 'tap to close' : 'tap for details'}</span></button>
+      <button type="button" className="grab" aria-expanded={open} onClick={() => setOpen(!open)}><span className="t1">{s.tree.name}</span><span className="t2">{empty ? 'Be the first to hang an ornament' : words.treeLine({ giving: g, counts: s.counts })} · {open ? 'tap to close' : 'tap for details'}</span></button>
       <div className="sheet-in">
-        <div className="wm" aria-hidden="true">SAMPLE</div>
-        <p className="disc">{brand.name} gives {amt(brand.per)} to {brand.charity.name} (reg. {brand.charity.reg}) for every card opened, up to {money(brand.cap)}, {brand.start} to {brand.end}. Live total below.</p>
-        <span className="chip"><span className="live" />{given >= brand.cap ? 'Pot complete. Thank you' : `Live · ${brand.payout}`}</span>
-        <div className="stats"><div className="stat"><b>{money(given)}</b><span>GIVEN SO FAR</span></div><div className="stat"><b>{brand.opened.toLocaleString('en-GB')}</b><span>CARDS OPENED</span></div></div>
-        <div className="pot"><div className="tr"><i style={{ width: pct.toFixed(1) + '%' }} /></div><div className="lb"><span>{Math.round(pct)}% of the {money(brand.cap)} pot</span><span>{given >= brand.cap ? 'Complete' : `${money(brand.cap - given)} left`}</span></div></div>
-        <div className="list"><h4>Gifts coming in</h4>{rows.map((r, i) => <div key={i} className={'r' + (r.you ? ' you' : '')}><span className="tt" /><div className="w">{r.n}'s card → {brand.charity.name}<small>card opened · {r.when}{r.you ? '' : ' · sample'}</small></div><span className="a">+{amt(brand.per)}</span></div>)}</div>
-        <button type="button" className="btn primary" onClick={() => s.restart('send')}>Send a card</button>
-        <div className="b2b">Powered by MosaicAds. Want your brand's ads to give like this? <a href="https://mosaicads.ai" target="_blank" rel="noopener">mosaicads.ai</a></div>
+        {g && <><p className="disc">{words.disclosure({ giving: g })}</p>
+          <span className="chip"><span className="live" />{g.given >= g.cap ? 'Pot complete. Thank you' : g.status === 'paused' ? 'Giving is paused' : g.status === 'ended' ? 'Giving has ended' : 'Live'}</span></>}
+        <div className="stats">{g
+          ? <><div className="stat"><b>{money(g.given)}</b><span>GIVEN SO FAR</span></div><div className="stat"><b>{s.counts.ornaments.toLocaleString('en-GB')}</b><span>ORNAMENTS</span></div></>
+          : <><div className="stat"><b>{s.counts.ornaments.toLocaleString('en-GB')}</b><span>{s.counts.ornaments === 1 ? 'ORNAMENT' : 'ORNAMENTS'}</span></div><div className="stat"><b>{s.counts.wishes.toLocaleString('en-GB')}</b><span>{s.counts.wishes === 1 ? 'WISH SHARED' : 'WISHES SHARED'}</span></div></>}</div>
+        {g && <div className="pot"><div className="tr"><i style={{ width: pct.toFixed(1) + '%' }} /></div><div className="lb"><span>{Math.round(pct)}% of the {money(g.cap)} pot</span><span>{g.given >= g.cap ? 'Complete' : `${money(g.cap - g.given)} left`}</span></div></div>}
+        {rows.length > 0 && <div className="list"><h4>Just hung</h4>{rows.map((r, i) => <div key={i} className="r"><span className="tt" /><div className="w">{r.n}<small>hung an ornament · {r.when}</small></div></div>)}</div>}
+        <button type="button" className="btn primary" onClick={() => s.openTree(s.tree.slug, { fresh: !s.mine })}>{s.mine ? 'Go to my branch' : 'Hang an ornament'}</button>
       </div>
     </div>}
   </>)

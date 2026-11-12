@@ -23,7 +23,7 @@ Test mode only (`TEST_MODE=1` on the server, never in production): the `x-gt-clo
 
 | Method & path | Body | 200 response | Errors |
 |---|---|---|---|
-| `POST removal` | `{ token }` (the person's own Christmas link) | `{ ok: true }`: the ornament is hidden and its wishes deleted | 404 `no_link` |
+| `POST me/{token}/remove` | none (the person's own Christmas link is in the path) | `{ ok: true }`: the ornament is hidden and its wishes deleted | 404 `no_link` |
 | `POST log` | `{ message, screen, build }` (trimmed to 500 characters; rejected if it looks like a token) | `{ ok: true }` | 429 `slow_down` |
 
 ## Page routes

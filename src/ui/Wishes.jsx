@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
-import { amt, money, hashStr } from '../lib/util'
+import { hashStr } from '../lib/util'
+import { copy, money } from '../../shared/copy.js'
+const words = { ...copy, money }
 import { chime, ensure } from '../lib/audio'
 import { api, get, post, track, addToCalendar } from '../lib/api'
 import { shared } from '../three/shared'
 import { WISH_MAX, BRANCH_MAX } from '../../shared/moderation.js'
 import { YEAR } from '../../shared/season.js'
 
-const FORM_ERRORS = { already: "You've already left a wish here.", own_card: "This is your own card. Ask someone else to leave you a wish.", bad_wish: 'Keep it to 140 characters.', frozen: 'The tree has closed for this year.' }
+const FORM_ERRORS = { already: "You've already left a wish here.", own_card: "This is your own card. Ask someone else to leave you a wish.", bad_wish: 'Keep it to 140 characters.', frozen: 'The tree has closed for this year.', slow_down: 'Slow down a little and try again shortly.' }
 const formError = e => FORM_ERRORS[e.code] || "That didn't send. Check your connection and try again."
 const HANDS = ['Caveat', 'Kalam', '"Shadows Into Light"']
 const handFor = name => HANDS[hashStr(name.toLowerCase()) % HANDS.length]
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
-const shortCharity = b => b.charity.name.replace(/^a UK /, 'a ')
 const Share = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></svg>
 
 /** A wrapped parcel in the page. `open` unties the ribbon and lifts the lid. */
@@ -50,8 +51,8 @@ export function WishFor() {
 /* ---------- the invited person's first moment ---------- */
 export function Meet({ brand }) {
   const s = useStore(), r = s.openResult, p = s.parent
-  const msg = !r ? '' : r.reason === 'own' ? "This is your own card, so opening it here doesn't give. It gives when someone else opens it."
-    : r.reason === 'cap' ? 'The pot is complete: thank you.' : r.reason === 'again' ? 'This card has already given from this phone.' : r.reason === 'closed' ? 'The tree has closed for this year.' : r.reason === 'error' ? "We couldn't reach the tree just now." : ''
+  // a line about giving appears only on a tree that has giving switched on
+  const line = words.openLine({ giving: s.tree.giving, result: r, from: s.from })
   const beginOwn = () => { ensure(); useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, cardP: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
   const late = s.clock.phase !== 'advent' // from 25 December wishes open at once, so nothing is "waiting"
   const waitingLine = !late && p.waiting > 0 ? ` ${plural(p.waiting, 'wish', 'wishes')} waiting for them already.` : ''
@@ -59,7 +60,7 @@ export function Meet({ brand }) {
     <div className="finale on">
       <div className="greet"><div className="hc small">{s.thanksFrom ? `Thank you from ${s.from}` : `${s.from}'s ornament`}</div>{p.branch.name && <div className="nm small">{p.branch.name}</div>}</div>
       <div className="foot">
-        {r?.counted ? <div className="gift"><span className="tile" /><p>Opening {s.from}'s card just gave <b>{amt(brand.per)}</b> to {brand.charity.name}, from {brand.name}.</p></div> : msg && <div className="gift muted"><span className="tile" /><p>{msg}</p></div>}
+        {line && <div className={'gift' + (line.given ? '' : ' muted')}><span className="tile" /><p>{line.text}</p></div>}
         {p.own || p.left ? <>
           <p className="note">{p.left ? (late ? `You've left ${s.from} a wish.` : `Your wish for ${s.from} is sealed.`) : 'This is the page the people you invite will see.'}</p>
           {s.mine && <button type="button" className="btn primary" onClick={() => s.openMe(s.mine.token)}>Go to my branch</button>}
@@ -96,7 +97,7 @@ export function Greeting({ brand }) {
       <div className="greet"><div className="hc">{s.clock.phase === 'nye' ? 'Happy New Year' : 'Happy Christmas'}</div><div className="nm">from {s.myName}</div></div>
       <div className="foot">
         <BranchCounter count={1} />
-        <p className="note">{brand.name} gives {amt(brand.per)} to {brand.charity.name} each time someone new opens your card, up to {money(brand.cap)} in total.</p>
+        <p className="note">{words.greetingNote({ giving: s.tree.giving })}</p>
         <button type="button" className="btn primary" onClick={() => withCard(() => setShare(true))}><Share />Invite people to your branch</button>
         <div className="btnrow"><button type="button" className="btn ghost" onClick={walk}>Walk around</button><button type="button" className="btn ghost" onClick={() => { asked.current = true; withCard(() => setSave(true)) }}>Save my link</button></div>
       </div>
@@ -109,16 +110,15 @@ export function Greeting({ brand }) {
 export function ShareSheet({ kind, brand, onClose }) {
   const s = useStore(), cv = useRef(), thanks = kind === 'thanks', c = s.mine, stats = s.me?.stats, nye = s.clock.phase === 'nye'
   const link = s.cardLink(c.id, thanks), waiting = s.parcels.filter(p => p.kind === 'friend').length, names = s.me?.branch.kids.map(k => k.name) || []
-  const gaveLine = thanks ? `${money(stats.given)} to ${shortCharity(brand)}` : ''
-  const text = thanks ? (nye ? `Happy New Year from our branch! We gave ${gaveLine}. Open yours →` : `Opened your wish, thank you! Our branch gave ${gaveLine}. Open yours →`)
-    : `I hung an ornament on the Giving Tree. Hang yours next to mine and leave me a wish${s.clock.phase === 'advent' ? ' for Christmas morning' : ''} 🎄`
+  const giving = s.tree.giving, late = s.clock.phase !== 'advent', given = stats?.given || 0
+  const text = thanks ? words.thanks({ giving, given, nye }) : words.invite({ late })
   useEffect(() => { const snap = shared.snapshot?.(); const x = cv.current?.getContext('2d'); if (!x) return
     x.fillStyle = '#0a1030'; x.fillRect(0, 0, 600, 314); if (snap) x.drawImage(snap, 0, 0, 600, 314)
     const g = x.createLinearGradient(0, 150, 0, 314); g.addColorStop(0, 'rgba(5,8,25,0)'); g.addColorStop(1, 'rgba(5,8,25,.88)'); x.fillStyle = g; x.fillRect(0, 0, 600, 314)
     x.fillStyle = '#ffe3ad'; x.font = '56px "Great Vibes", cursive'; x.fillText(thanks ? `${s.branchName || `${s.myName}'s branch`}` : s.myName, 26, 268)
-    x.fillStyle = '#e8ebf5'; x.font = '500 21px "Bricolage Grotesque", sans-serif'; x.fillText(thanks ? `${names.slice(0, 5).join(' · ')}${names.length > 5 ? ' …' : ''}   ${money(stats.given)}` : `${plural(waiting, 'wish', 'wishes')} waiting`, 28, 298)
+    x.fillStyle = '#e8ebf5'; x.font = '500 21px "Bricolage Grotesque", sans-serif'; x.fillText(thanks ? `${names.slice(0, 5).join(' · ')}${names.length > 5 ? ' …' : ''}` : late ? 'Leave me a wish' : `${plural(waiting, 'wish', 'wishes')} waiting`, 28, 298)
     post(`me/${c.token}/preview`, { kind, jpeg: cv.current.toDataURL('image/jpeg', .72) }).catch(() => {}) }, [])
-  const sent = () => track(thanks ? 'share_v2' : 'share_v1', s.brandKey)
+  const sent = () => track(thanks ? 'share_v2' : 'share_v1', s.tree.slug)
   const tryShare = async () => { sent(); try { if (navigator.share) { await navigator.share({ title: 'The Giving Tree', text, url: link }); return } } catch (e) { return } s.toastMsg("Your phone's share sheet opens here on the live site.") }
   const copy = () => { sent(); try { navigator.clipboard.writeText(`${text} ${link}`).then(() => s.toastMsg('Link copied'), () => s.toastMsg(link)) } catch (e) { s.toastMsg(link) } }
   return (
@@ -128,7 +128,7 @@ export function ShareSheet({ kind, brand, onClose }) {
         <h3>{thanks ? (nye ? 'Happy New Year from our branch' : 'Your thank-you card') : 'Your invitation is ready'}</h3>
         <p className="sub">{thanks ? 'One card for everyone on your branch, or send it to the family group.' : 'This is what it looks like when you send it.'}</p>
         <div className="chat"><div className="bubble">
-          <div className="prev"><canvas ref={cv} width={600} height={314} /><div className="pt"><b>{thanks ? `Thank you from ${s.branchName || `${s.myName}'s branch`}` : `${s.myName} hung an ornament on the Giving Tree`}</b><span>Open it and {brand.name} gives {amt(brand.per)} to {brand.charity.name}. Best with the sound on.</span><em>{location.host}</em></div></div>
+          <div className="prev"><canvas ref={cv} width={600} height={314} /><div className="pt"><b>{words.previewTitle({ name: s.myName, branchName: s.branchName, thanks })}</b><span>{words.previewText({ giving, thanks, waiting, given, late })} Best with the sound on.</span><em>{location.host}</em></div></div>
           <div className="msg">{text} <span className="u">{link}</span></div><div className="time">✓✓</div>
         </div></div>
         <div className="btnrow"><button type="button" className="btn primary" onClick={tryShare}>Share</button><button type="button" className="btn ghost" onClick={copy}>Copy link</button></div>
@@ -141,7 +141,7 @@ export function ShareSheet({ kind, brand, onClose }) {
 /** Three ways to find your branch again on 25 December. None needs an account. */
 export function SaveLink({ brand, onClose }) {
   const s = useStore(), c = s.mine, url = `${location.origin}/me/${c.token}`, [email, setEmail] = useState(''), [news, setNews] = useState(false), [err, setErr] = useState(''), [saved, setSaved] = useState(!!s.me?.reminded)
-  const self = async () => { track('saved_selfsend', s.brandKey); const text = `My Giving Tree wishes open on Christmas morning 🎁 ${url}`
+  const self = async () => { track('saved_selfsend', s.tree.slug); const text = `My Giving Tree wishes open on Christmas morning 🎁 ${url}`
     try { if (navigator.share) { await navigator.share({ title: 'My Christmas link', text }); return } } catch (e) { return } window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener') }
   const remind = async e => { e.preventDefault(); try { await post(`me/${c.token}/reminder`, { email, news }); setSaved(true) } catch (x) { setErr(x.code === 'bad_email' ? "That doesn't look like an email address." : "That didn't save. Try again.") } }
   return (
@@ -150,13 +150,13 @@ export function SaveLink({ brand, onClose }) {
         <button type="button" className="x" aria-label="Close" onClick={onClose}>×</button>
         <h3>Save your Christmas link</h3>
         <p className="sub">Your wishes open on 25 December, on your own private page.</p>
-        <button type="button" className="btn primary" onClick={() => { track('saved_calendar', s.brandKey); addToCalendar(c.token) }}>Add to calendar</button>
+        <button type="button" className="btn primary" onClick={() => { track('saved_calendar', s.tree.slug); addToCalendar(c.token) }}>Add to calendar</button>
         <button type="button" className="btn ghost" onClick={self}>Send it to myself</button>
         {api.info.email && (saved ? <p className="note">We'll email you once, on 25 December, with your link.</p> :
           <form className="remind" onSubmit={remind}>
             <label htmlFor="remIn">We'll email you once, on 25 December, with your link. Nothing else.</label>
             <div className="btnrow"><input id="remIn" className="field" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e => { setErr(''); setEmail(e.target.value) }} /><button type="submit" className="btn ghost" disabled={!email}>Remind me</button></div>
-            <label className="tick"><input type="checkbox" checked={news} onChange={e => setNews(e.target.checked)} /> Also send me news from {brand.name}</label>
+            {s.tree.giving && <label className="tick"><input type="checkbox" checked={news} onChange={e => setNews(e.target.checked)} /> Also send me news from {s.tree.giving.sponsor}</label>}
             <p className="err" role="alert">{err}</p>
           </form>)}
         <p className="fine">If you lose this link and change phones, your wishes can't be recovered. On this phone, your original card link will still find your branch. {api.info.email ? 'Emails are deleted on 1 February.' : ''}</p>
@@ -221,16 +221,16 @@ export function Parcels() {
   </>)
 }
 
-export function Gave({ brand }) {
-  const s = useStore(), { stats, tree } = s.me
+export function Gave() {
+  const s = useStore(), sum = words.summary({ giving: s.tree.giving, stats: s.me.stats })
   return (
     <div className="finale on">
       <div className="greet" />
       <div className="foot">
         <div className="gavecard">
           <h3>{s.branchName || 'Your branch'}</h3>
-          <div className="stats three"><div className="stat"><b>{stats.ornaments}</b><span>{stats.ornaments === 1 ? 'ORNAMENT' : 'ORNAMENTS'}</span></div><div className="stat"><b>{stats.opened}</b><span>CARDS OPENED</span></div><div className="stat"><b>{money(stats.given)}</b><span>GIVEN</span></div></div>
-          <p>to {brand.charity.name}. The whole tree has given <b>{money(tree.given)}</b>{tree.complete ? '. The pot is complete: thank you.' : '.'}</p>
+          <div className={'stats ' + (sum.figures.length === 3 ? 'three' : '')}>{sum.figures.map(([n, label]) => <div className="stat" key={label}><b>{n}</b><span>{label}</span></div>)}</div>
+          <p>{sum.line}</p>
         </div>
         <button type="button" className="btn primary" onClick={() => s.setPhase('thanks')}>Say thank you</button>
       </div>
@@ -270,14 +270,14 @@ export function SelfCoda() {
 }
 
 /* ---------- after New Year ---------- */
-export function Keepsake({ brand }) {
-  const s = useStore(), [d, setD] = useState(null)
-  useEffect(() => { let on = true; get(`keepsake/${s.brandKey}`).then(r => on && setD(r)).catch(() => on && setD({ given: brand.opened * brand.per, opened: brand.opened, names: [] })); return () => { on = false } }, [s.brandKey])
+export function Keepsake() {
+  const s = useStore(), [d, setD] = useState(null), slug = s.tree.slug
+  useEffect(() => { let on = true; get(`keepsake/${slug}`).then(r => on && setD(r)).catch(() => on && setD({ tree: s.tree, counts: s.counts, names: [] })); return () => { on = false } }, [slug])
   return (
     <div className="keepsake">
       <div className="ks-in">
-        <h2>The {YEAR} Giving Tree</h2>
-        {d && <><p className="ks-total">{money(d.given)}</p><p className="sub">given to {brand.charity.name} by {brand.name}, from {d.opened.toLocaleString('en-GB')} cards opened.</p>
+        <h2>{d && d.tree.kind !== 'global' ? `${d.tree.name}, ${YEAR}` : `The ${YEAR} Giving Tree`}</h2>
+        {d && <><p className="ks-total">{d.tree.giving ? words.money(d.tree.giving.given) : d.counts.ornaments.toLocaleString('en-GB')}</p><p className="sub">{words.keepsake({ giving: d.tree.giving, counts: d.counts })}</p>
           {s.mine && <button type="button" className="btn primary" onClick={() => s.openMe(s.mine.token)}>See my branch</button>}
           {d.names.length > 0 && <p className="ks-names">{d.names.join(' · ')}</p>}</>}
       </div>

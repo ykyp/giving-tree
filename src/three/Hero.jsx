@@ -204,7 +204,7 @@ export default function Hero({ brand }) {
     if (!visible) { if (ring.current) ring.current.visible = false; if (hookPts.current) hookPts.current.visible = false; return }
 
     // paint the name (letters fade in as they are typed)
-    const key = `${name}|${design}|${s.brandKey}|${s.phase === 'engrave'}`
+    const key = `${name}|${design}|${s.tree.slug}|${brand.per}|${s.phase === 'engrave'}`
     if (key !== st8.lastName || st8.pending) {
       paintSurface(canvas.getContext('2d'), 0, 0, 4, design, designColor(design, brand.palette, brand.accent), name || 'Your name',
         { t, times: isSend && s.phase === 'engrave' ? s.engraveTimes : null, ghost: !name, per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })

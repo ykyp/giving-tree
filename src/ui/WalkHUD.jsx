@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store'
-import { BRANDS } from '../config'
-import { amt, money } from '../lib/util'
+import { copy as words } from '../../shared/copy.js'
 import { ensure } from '../lib/audio'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
@@ -61,18 +60,15 @@ export function Minimap() {
 
 /** What you read when you arrive somewhere. */
 export function PoiCard({ brand, onOwn, bottom }) {
-  const poi = useStore(s => s.poi), view = useStore(s => s.view), heroHook = useStore(s => s.heroHook), brandKey = useStore(s => s.brandKey)
+  const poi = useStore(s => s.poi), heroHook = useStore(s => s.heroHook), tree = useStore(s => s.tree), counts = useStore(s => s.counts)
   if (!poi) return null
   const close = () => useStore.setState({ poi: null })
-  const given = brand.opened * brand.per
   const stall = STALLS.find(s => s.id === poi)
   let title, text, action = null
-  if (poi === 'tree') { title = brand.title; text = `${crowd.list.length} ornaments, each one a card that gave. ${money(given)} to ${brand.charity.name} so far.`
+  if (poi === 'tree') { title = tree.name; text = counts.ornaments ? `${counts.ornaments.toLocaleString('en-GB')} ${counts.ornaments === 1 ? 'ornament' : 'ornaments'}, each one hung by someone. ${words.treeLine({ giving: tree.giving, counts })}.` : 'No ornaments yet. Be the first to hang one.'
     action = heroHook < 0 ? ['Hang your own ornament', onOwn] : ['Look closer', () => useStore.setState({ exploreMode: 'orbit', poi: null })] }
-  else if (poi === 'post') { title = 'Letters to Santa'; text = `Post a Christmas card to someone. When they open it, ${brand.name} gives ${amt(brand.per)} to ${brand.charity.name}.`; action = ['Write a card', onOwn] }
-  else if (stall) { title = stall.name; const b = stall.brand && BRANDS[stall.brand]
-    text = b ? `${stall.sell}. ${b.name} gives ${amt(b.per)} to ${b.charity.name} for every card opened from their tree.` : `${stall.sell}. Warm hands, cold noses.`
-    if (b) action = brandKey === b.slug ? ['You’re at their tree', null] : ['Visit their tree', () => { useStore.setState({ brandKey: b.slug, poi: null, heroHook: -1, focus: null }); useStore.getState().toastMsg(`The square's tree now shows ${b.name}'s ornaments`); walkToPoi('tree') }] }
+  else if (poi === 'post') { title = 'Letters to Santa'; text = 'Hang an ornament and the people you invite can leave you a wish for Christmas morning.'; if (heroHook < 0) action = ['Hang an ornament', onOwn] }
+  else if (stall) { title = stall.name; text = `${stall.sell}. Warm hands, cold noses.` }
   else if (poi === 'rink') { title = 'Skating rink'; text = 'Round and round under the lights. Mind the corners.' }
   else if (poi === 'carousel') { title = 'The carousel'; text = 'Painted horses, brass poles and a waltz on repeat.' }
   else if (poi === 'church') { title = 'St Nicholas Church'; text = 'Carols by candlelight on Christmas Eve, 6pm. The bells ring at midnight.' }
