@@ -98,6 +98,7 @@ export function Greeting({ brand }) {
       <div className="foot">
         <BranchCounter count={1} />
         <p className="note">{words.greetingNote({ giving: s.tree.giving })}</p>
+        {s.tree.kind === 'community' && <p className="note">This is {s.tree.name}. Anyone with its link can hang here: <b style={{ overflowWrap: 'anywhere' }}>{location.host}/t/{s.tree.slug}</b></p>}
         <button type="button" className="btn primary" onClick={() => withCard(() => setShare(true))}><Share />Invite people to your branch</button>
         <div className="btnrow"><button type="button" className="btn ghost" onClick={walk}>Walk around</button><button type="button" className="btn ghost" onClick={() => { asked.current = true; withCard(() => setSave(true)) }}>Save my link</button></div>
       </div>

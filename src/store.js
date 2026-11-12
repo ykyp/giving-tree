@@ -7,7 +7,9 @@ const lsGet = k => { try { return localStorage.getItem(k) } catch (e) { return n
 const lsSet = (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }
 /** The device remembers its own branch on each tree, so the original link finds it again. */
 const allMine = () => { try { return JSON.parse(lsGet('gt3-mine') || '{}') } catch (e) { return {} } }
-const saveMine = c => lsSet('gt3-mine', JSON.stringify({ ...allMine(), [c.tree]: { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree } }))
+const saveMine = (c, treeName) => lsSet('gt3-mine', JSON.stringify({ ...allMine(), [c.tree]: { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree, treeName: treeName || allMine()[c.tree]?.treeName } }))
+/** A wish someone sent, waiting for this phone to hang an ornament (set by the sent-wish page). */
+const pendingSent = slug => { try { const p = JSON.parse(sessionStorage.getItem('gt-sent') || 'null'); return p && p.tree === slug ? p : null } catch (e) { return null } }
 const forgetMine = slug => { const all = allMine(); delete all[slug]; lsSet('gt3-mine', JSON.stringify(all)) }
 export const mineFor = slug => allMine()[slug] || null
 
@@ -57,7 +59,6 @@ export const useStore = create((set, get) => ({
   boot: async () => {
     await bootApi()
     if (!api.info.ok) return set({ unreachable: true }) // the server exists but can't serve: say so rather than pretend
-    api.clockIso = demoDate && api.info.testMode ? new Date(demoDate).toISOString() : null
     if (!api.info.testMode) demoDate = ''
     set({ apiInfo: api.info, unreachable: false, demoDate }); get().tickClock()
     if (!ticking) ticking = setInterval(() => get().tickClock(), 30000)
@@ -119,7 +120,7 @@ export const useStore = create((set, get) => ({
   openMe: async (token, thanksFrom = null) => {
     let m; try { m = await apiGet(`me/${token}?day=${today()}`) } catch (e) { get().toastMsg("We couldn't find that branch."); forgetMine(get().tree.slug); set({ mine: null }); return get().restart('send') }
     if (m.removed) { forgetMine(m.tree.slug); try { await get().loadTree(m.tree.slug) } catch (e) {} get().toastMsg('That ornament has been removed.'); return get().restart('send') }
-    const c = m.card; saveMine(c)
+    const c = m.card; saveMine(c, m.tree.name)
     if (get().tree.slug !== c.tree || !get().treeRev) { try { await get().loadTree(c.tree) } catch (e) {} }
     if (get().clock.phase === 'keepsake' && !m.wishes.length) return get().restart('keepsake')
     set(s => ({ view: 'me', tree: m.tree, counts: m.counts, me: m, mine: mineFor(c.tree), myName: c.name, design: c.design, sel: c.design, heroHook: c.hook, parcels: m.wishes, wishOpen: null, branchName: m.branch.name, parent: null, focus: null, poi: null, exploreMode: 'walk',
@@ -134,8 +135,12 @@ export const useStore = create((set, get) => ({
   /** Saves the ornament as soon as it is on the tree. Everything after this hangs off the card. */
   createCard: () => {
     const s = get(); if (s.cardP) return s.cardP
-    const p = apiPost('card', { tree: s.tree.slug, name: s.myName, design: s.design, hook: s.heroHook, parent: s.parent?.id })
-      .then(c => { saveMine(c); set(st => ({ mine: mineFor(c.tree), counts: { ...st.counts, ornaments: st.counts.ornaments + 1 } })); return c }).catch(e => { set({ cardP: null }); throw e })
+    const sent = pendingSent(s.tree.slug)
+    const p = apiPost('card', { tree: s.tree.slug, name: s.myName, design: s.design, hook: s.heroHook, parent: s.parent?.id, ...(sent ? { sent: sent.token } : {}) })
+      .then(c => { saveMine(c, get().tree.name); set(st => ({ mine: mineFor(c.tree), counts: { ...st.counts, ornaments: st.counts.ornaments + 1 } }))
+        if (sent) { try { sessionStorage.removeItem('gt-sent') } catch (e) {}
+          if (c.sent === 'ok') { set(st => ({ parcels: [...st.parcels, { id: 'sent-' + sent.token.slice(0, 6), from: sent.from, kind: 'friend', opened: false }] })); get().toastMsg(`${sent.from}'s wish is under your ornament`) } }
+        return c }).catch(e => { set({ cardP: null }); throw e })
     set({ cardP: p }); return p
   },
   cardLink: (id, thanks) => `${location.origin}/c/${id}${thanks ? '?t=1' : ''}`,

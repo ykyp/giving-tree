@@ -6,7 +6,7 @@ const ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const rid = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => ALPHABET[b % ALPHABET.length]).join('')
 const day = d => d == null ? null : typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)
 
-const toTree = r => r && ({ slug: r.slug, kind: r.kind, name: r.name, published: r.published,
+const toTree = r => r && ({ slug: r.slug, kind: r.kind, name: r.name, published: r.published, createdBy: r.created_by ?? null,
   giving: { enabled: r.giving_enabled, status: r.giving_status, sponsor: r.sponsor_name, charityName: r.charity_name, charityReg: r.charity_reg, perGift: r.per_gift_pence, cap: r.cap_pence,
     given: r.given_pence, starts: day(r.starts_on), ends: day(r.ends_on), agreementSigned: r.agreement_signed, payout: r.payout } })
 const toCard = r => r && ({ id: r.id, token: r.token, tree: r.tree, name: r.name, design: r.design, hook: r.hook, parent: r.parent, branchName: r.branch_name, device: r.device, at: Number(r.at), hidden: r.hidden,
@@ -20,7 +20,9 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
     // ---- trees ----
     async getTree(slug) { return toTree((await sql`select * from trees where slug = ${slug}`)[0]) || null },
     async listTrees() { return (await sql`select * from trees order by kind desc, created_at`).map(toTree) },
-    async createTree({ slug, name, published = true }) { return toTree((await sql`insert into trees (slug, name, published) values (${slug}, ${name}, ${published}) on conflict do nothing returning *`)[0]) || null },
+    async createTree({ slug, name, published = true, createdBy = null }) { return toTree((await sql`insert into trees (slug, name, published, created_by) values (${slug}, ${name}, ${published}, ${createdBy}) on conflict do nothing returning *`)[0]) || null },
+    async reportTree(slug, device, at) { await sql`insert into tree_reports (tree, device, at) values (${slug}, ${device}, ${at}) on conflict do nothing`; return (await sql`select count(*)::int as n from tree_reports where tree = ${slug}`)[0].n },
+    async takeDownTree(slug, at) { return (await sql`update trees set published = false, taken_down_at = ${at} where slug = ${slug} and kind <> 'global' returning slug`).length > 0 },
     /** Changes the settings, never the recorded total. */
     async setGiving(slug, g) {
       return toTree((await sql`update trees set giving_enabled = ${!!g.enabled}, giving_status = ${g.status}, sponsor_name = ${g.sponsor ?? null}, charity_name = ${g.charityName ?? null}, charity_reg = ${g.charityReg ?? null},
@@ -67,6 +69,12 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
     async reviewQueue() { return wiped() ? [] : (await sql`select * from wishes where status = 'review' order by at`).map(toWish) },
     async decideWish(id, status) { return (await sql`update wishes set status = ${status} where id = ${id} returning status`)[0]?.status || null },
     async oldestWaiting() { const [r] = await sql`select min(at) as at from wishes where status = 'review'`; return wiped() || r.at == null ? null : Number(r.at) },
+
+    // ---- wishes sent to someone who has no ornament yet ----
+    async sendWish({ tree, from, to, text, device, status, at }) { const token = rid(24); await sql`insert into sent_wishes (token, tree, from_name, to_name, body, device, status, at) values (${token}, ${tree}, ${from}, ${to}, ${text}, ${device}, ${status}, ${at})`; return { token } },
+    /** Never includes the words. */
+    async getSentWish(token) { if (wiped()) return null; const r = (await sql`select token, tree, from_name, to_name, device, status, claimed_by from sent_wishes where token = ${token}`)[0]; return r ? { token: r.token, tree: r.tree, from: r.from_name, to: r.to_name, device: r.device, status: r.status, claimedBy: r.claimed_by } : null },
+    async claimSentWish(token, cardId, at) { if (wiped()) return 'no_wish'; return (await sql`select claim_sent_wish(${token}, ${cardId}, ${rid(12)}, ${at}) as out`)[0].out },
 
     // ---- opens and the gift record ----
     async recordOpen({ cardId, device, at, day }) { const [r] = await sql`select record_open(${cardId}, ${device}, ${at}, ${day}) as out`; return r.out },

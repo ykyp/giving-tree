@@ -5,6 +5,7 @@ import { BLOCK, DESIGN_META } from '../config'
 import { ago } from '../lib/util'
 import { copy as words, money } from '../../shared/copy.js'
 import { ensure, setSound, chime, bells } from '../lib/audio'
+import { post } from '../lib/api'
 import { Greeting, Meet, SealSelf, WishFor, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
@@ -71,7 +72,7 @@ export default function Overlay({ brand }) {
       <Toast />
       <div className="topbar">
         {phase === 'explore' && view !== 'tree' && view !== 'keepsake' && <button type="button" className="back" aria-label="Back" onClick={() => { useStore.setState({ focus: null }); s.setPhase(view === 'me' ? s.myHome() : 'greeting') }}><Arrow d="m15 18-6-6 6-6" /></button>}
-        <span className="brand"><Mark />{s.tree.name}</span>
+        <a className="brand" href="/" aria-label={`${s.tree.name}. Go to the start page`}><Mark />{s.tree.name}</a>
         <button type="button" className="snd" aria-label={s.sound ? 'Turn sound off' : 'Turn sound on'} aria-pressed={s.sound} onClick={() => { useStore.setState({ sound: !s.sound }); setSound(!s.sound) }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H3v6h3l5 4z" /><path d={s.sound ? 'M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14' : 'm22 9-6 6m0-6 6 6'} /></svg></button>
       </div>
@@ -154,9 +155,18 @@ function Explore({ brand }) {
         {g && <div className="pot"><div className="tr"><i style={{ width: pct.toFixed(1) + '%' }} /></div><div className="lb"><span>{Math.round(pct)}% of the {money(g.cap)} pot</span><span>{g.given >= g.cap ? 'Complete' : `${money(g.cap - g.given)} left`}</span></div></div>}
         {rows.length > 0 && <div className="list"><h4>Just hung</h4>{rows.map((r, i) => <div key={i} className="r"><span className="tt" /><div className="w">{r.n}<small>hung an ornament · {r.when}</small></div></div>)}</div>}
         <button type="button" className="btn primary" onClick={() => s.openTree(s.tree.slug, { fresh: !s.mine })}>{s.mine ? 'Go to my branch' : 'Hang an ornament'}</button>
+        {s.tree.kind === 'community' && <TreeLinks />}
       </div>
     </div>}
   </>)
+}
+
+/** A tree someone created: share its own link, or report it. */
+function TreeLinks() {
+  const s = useStore(), link = `${location.origin}/t/${s.tree.slug}`, [reported, setReported] = useState(false)
+  const copyLink = () => { try { navigator.clipboard.writeText(link).then(() => s.toastMsg("The tree's link is copied"), () => s.toastMsg(link)) } catch (e) { s.toastMsg(link) } }
+  const report = () => { post(`tree/${s.tree.slug}/report`).catch(() => {}); setReported(true); s.toastMsg("Thanks. We'll take a look at this tree.") }
+  return <div className="btnrow"><button type="button" className="btn ghost" onClick={copyLink}>Copy this tree's link</button><button type="button" className="btn text" disabled={reported} onClick={report}>{reported ? 'Reported' : 'Report this tree'}</button></div>
 }
 
 function Labels() {

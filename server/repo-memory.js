@@ -16,7 +16,7 @@ export const GLOBAL_TREE = { slug: 'global', kind: 'global', name: 'The Giving T
 /** Giving can only be live with every setting present and the agreement signed. */
 export const givingComplete = g => !!(g.enabled && g.agreementSigned && g.sponsor && g.charityName && g.charityReg && g.perGift > 0 && g.cap > 0)
 
-const EMPTY = () => ({ trees: {}, cards: {}, tokens: {}, kids: {}, wishes: {}, wishList: {}, opens: {}, gifts: [], events: [], returned: {}, reminders: {}, previews: {}, limits: {}, removals: [], seq: 0 })
+const EMPTY = () => ({ trees: {}, cards: {}, tokens: {}, kids: {}, wishes: {}, wishList: {}, opens: {}, gifts: [], events: [], returned: {}, reminders: {}, previews: {}, limits: {}, removals: [], sent: {}, reports: {}, seq: 0 })
 
 export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
   const s = { ...EMPTY(), ...(load?.() || {}) }
@@ -24,7 +24,7 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
   const persist = () => save?.(s)
   const copy = v => v == null ? null : structuredClone(v)
   /** Wishes and emails are deleted on 1 February. */
-  const purge = () => { if (now() >= WIPE_AT && (Object.keys(s.wishes).length || Object.keys(s.reminders).length)) { s.wishes = {}; s.wishList = {}; s.reminders = {}; persist() } }
+  const purge = () => { if (now() >= WIPE_AT && (Object.keys(s.wishes).length || Object.keys(s.reminders).length || Object.keys(s.sent).length)) { s.wishes = {}; s.wishList = {}; s.reminders = {}; s.sent = {}; persist() } }
   const cardsOf = slug => Object.values(s.cards).filter(c => c.tree === slug)
   const opensOf = id => Object.entries(s.opens).filter(([k]) => k.startsWith(id + '|')).map(([, o]) => o)
 
@@ -32,7 +32,10 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
     // ---- trees ----
     async getTree(slug) { return copy(s.trees[slug]) },
     async listTrees() { return Object.values(s.trees).map(copy) },
-    async createTree({ slug, name, published = true }) { if (s.trees[slug]) return null; s.trees[slug] = { slug, kind: 'community', name, published, giving: { ...GIVING_OFF } }; persist(); return copy(s.trees[slug]) },
+    async createTree({ slug, name, published = true, createdBy = null }) { if (s.trees[slug]) return null; s.trees[slug] = { slug, kind: 'community', name, published, createdBy, giving: { ...GIVING_OFF } }; persist(); return copy(s.trees[slug]) },
+    /** One report per device per tree. Returns how many devices have reported it. */
+    async reportTree(slug, device, at) { (s.reports[slug] ||= {})[device] ||= at; persist(); return Object.keys(s.reports[slug]).length },
+    async takeDownTree(slug, at) { const t = s.trees[slug]; if (!t || t.kind === 'global') return false; t.published = false; t.takenDownAt = at; persist(); return true },
     async setGiving(slug, giving) { const t = s.trees[slug]; if (!t) return null; t.giving = { ...t.giving, ...giving, given: t.giving.given }; persist(); return copy(t) },
     async counts(slug) { purge(); const ids = new Set(cardsOf(slug).map(c => c.id)); return { ornaments: cardsOf(slug).filter(c => !c.hidden).length, wishes: Object.values(s.wishes).filter(w => ids.has(w.to) && w.status === 'ok').length } },
     /** Newest first. `since` is the cursor from the last call; only newer ornaments come back. */
@@ -70,6 +73,22 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
     async reviewQueue() { purge(); return Object.values(s.wishes).filter(w => w.status === 'review').sort((a, b) => a.at - b.at).map(copy) },
     async decideWish(id, status) { if (!s.wishes[id]) return null; s.wishes[id].status = status; persist(); return status },
     async oldestWaiting() { purge(); const q = Object.values(s.wishes).filter(w => w.status === 'review'); return q.length ? Math.min(...q.map(w => w.at)) : null },
+
+    // ---- wishes sent to someone who has no ornament yet ----
+    async sendWish({ tree, from, to, text, device, status, at }) { purge(); const token = rid(24); s.sent[token] = { token, tree, from, to, text, device, status, at, claimedBy: null, claimedAt: null }; persist(); return { token } },
+    /** Never includes the words. */
+    async getSentWish(token) { purge(); const w = s.sent[token]; return w ? { token: w.token, tree: w.tree, from: w.from, to: w.to, device: w.device, status: w.status, claimedBy: w.claimedBy } : null },
+    /** Turns a sent wish into an ordinary wish for this card. Once, and never for its own sender. */
+    async claimSentWish(token, cardId, at) {
+      purge(); const w = s.sent[token], c = s.cards[cardId]
+      if (!w || w.status === 'rejected') return 'no_wish'
+      if (w.claimedAt != null) return 'claimed'
+      if (c.device === w.device) return 'own_wish'
+      if (c.tree !== w.tree) return 'wrong_tree'
+      if (Object.values(s.wishes).some(x => x.to === cardId && x.kind === 'friend' && x.device === w.device)) return 'already'
+      const wish = { id: rid(12), to: cardId, from: w.from, text: w.text, kind: 'friend', device: w.device, status: w.status, at: w.at, opened: false, reported: false }
+      s.wishes[wish.id] = wish; (s.wishList[cardId] ||= []).push(wish.id); w.claimedBy = cardId; w.claimedAt = at; persist(); return 'ok'
+    },
 
     // ---- opens and the gift record ----
     /**

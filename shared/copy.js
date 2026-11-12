@@ -42,6 +42,8 @@ export const copy = {
   treeLine: ({ giving, counts }) => giving ? `${money(giving.given)} given · ${plural(counts.ornaments, 'ornament')}` : `${plural(counts.ornaments, 'ornament')} · ${plural(counts.wishes, 'wish', 'wishes')}`,
   disclosure: ({ giving }) => giving ? `${giving.sponsor} gives ${amt(giving.perGift)} to ${giving.charity.name} (reg. ${giving.charity.reg}) for every card opened, up to ${money(giving.cap)}${giving.starts ? `, ${giving.starts} to ${giving.ends}` : ''}.${giving.payout ? ` ${giving.payout}.` : ''}` : null,
   keepsake: ({ giving, counts }) => giving ? `${money(giving.given)} given to ${giving.charity.name} by ${giving.sponsor}.` : `${plural(counts.ornaments, 'ornament')} hung and ${plural(counts.wishes, 'wish', 'wishes')} shared.`,
+  /** The message that goes with a wish sent to someone who has no ornament yet. */
+  sentMessage: ({ to, late }) => `${to}, I've sent you a wish on the Giving Tree. Hang an ornament to keep it${late ? '' : ' and open it on Christmas morning'} 🎁`,
   calendar: ({ url }) => ({ summary: 'Open your Christmas wishes 🎁', description: `Your wishes are waiting on the Giving Tree: ${url}` }),
   reminderEmail: ({ url }) => ({ subject: 'Open your Christmas wishes 🎁', text: `Your wishes are ready on the Giving Tree: ${url}\n\nThis is the one email we said we'd send.` }),
 }

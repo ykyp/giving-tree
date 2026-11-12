@@ -1,8 +1,8 @@
-// Builds the publishable page: fonts + inlined CSS + the single app.js bundle.
+// Builds the single-file demo page: fonts + inlined CSS + one app.js with the rules inside (`npm run build:demo`).
 import fs from 'fs'
 const css = fs.readFileSync('page.css', 'utf8')
 fs.mkdirSync('publish', { recursive: true })
-fs.copyFileSync('dist/app.js', 'publish/app.js')
+fs.copyFileSync('dist-demo/app.js', 'publish/app.js')
 fs.writeFileSync('publish/index.html', `<title>The Giving Tree</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="gt-demo" content="1">

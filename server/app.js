@@ -2,12 +2,15 @@
 // call handle() with a request and a repository (server/repo-memory.js or server/repo-postgres.js).
 import { RELEASE_UTC, FROZEN_UTC, isReleased, YEAR } from '../shared/season.js'
 import { WISH_MAX, BRANCH_MAX, flagWish, badName } from '../shared/moderation.js'
-import { copy, SITE } from '../shared/copy.js'
+import { copy } from '../shared/copy.js'
+import { page, pages, sitemap } from '../shared/shell.js'
+import { treeSlug } from '../shared/slug.js'
 import { givingComplete } from './repo-memory.js'
 
 const BOT = /bot\b|bot\/|crawl|spider|facebookexternalhit|whatsapp|slack|telegram|discord|linkedin|skypeuripreview|preview/i
 const EVENTS = new Set(['share_v1', 'share_v2', 'saved_calendar', 'saved_selfsend'])
-const LIMITS = { card: [864e5, 3], wish: [36e5, 10], log: [6e4, 20] } // per device: 3 cards a day on a tree, 10 wishes an hour
+const LIMITS = { card: [864e5, 3], wish: [36e5, 10], tree: [864e5, 2], log: [6e4, 20] } // per device: 3 cards a day on a tree, 10 wishes an hour, 2 new trees a day
+const REPORTS_TO_TAKE_DOWN = 3
 const TREE_NAME_MAX = 40
 const ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const rid = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => ALPHABET[b % ALPHABET.length]).join('')
@@ -59,15 +62,6 @@ function icsFor(card, origin) {
     `DTSTART:${YEAR}1225T090000`, `DTEND:${YEAR}1225T093000`, `SUMMARY:${c.summary}`, `DESCRIPTION:${c.description}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n'
 }
 
-/** The pages link-preview bots get. People get the app. */
-const ogPage = (title, text, image) => `<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><meta property="og:site_name" content="${SITE}"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(text)}"><meta property="og:type" content="website"><meta property="og:image" content="${image}"><meta name="twitter:card" content="summary_large_image">`
-async function cardPreview(repo, card, thanks, origin, t) {
-  const tree = await repo.getTree(card.tree), giving = givingOf(tree), b = await repo.getBranch(card.id), kind = thanks ? 'thanks' : 'invite'
-  const waiting = visible(await repo.wishesFor(card.id)).filter(w => w.kind === 'friend').length
-  const image = await repo.getPreview(card.id, kind) ? `${origin}/api/img/${card.id}/${kind}` : `${origin}/og.jpg`
-  return ogPage(copy.previewTitle({ name: card.name, branchName: card.branchName, thanks }), copy.previewText({ giving, thanks, waiting, given: giving ? b.gifts * giving.perGift : 0, late: t >= RELEASE_UTC }), image)
-}
-
 async function route(req, repo, env, ctx) {
   const { method, query = {}, body = {}, headers = {} } = req, { t, device, origin } = ctx
   const parts = req.path.replace(/^\/+|\/+$/g, '').split('/'), [a, b1, b2, b3] = parts
@@ -83,7 +77,12 @@ async function route(req, repo, env, ctx) {
   if (GET && a === 'keepsake') { const tree = await treeBySlug(repo, b1 || 'global'); return { tree: treeView(tree), counts: await repo.counts(tree.slug), names: (await repo.keepsakeNames(tree.slug)).slice(0, 20000) } }
 
   // ---- cards ----
-  if (POST && a === 'card') { const c = await createCard(repo, t, device, body); return { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree } }
+  if (POST && a === 'card') {
+    const c = await createCard(repo, t, device, body), out = { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree }
+    // hung from a wish someone sent: the wish goes under this ornament. A failed claim never loses the ornament.
+    if (body.sent) out.sent = await repo.claimSentWish(String(body.sent), c.id, t)
+    return out
+  }
   if (GET && a === 'card') {
     const c = await cardById(repo, b1), wishes = visible(await repo.wishesFor(c.id)), b = await branchView(repo, c)
     return { ...pub(c), tree: treeView(await repo.getTree(c.tree)), branch: { name: b.name, kids: b.kids }, waiting: wishes.filter(w => w.kind === 'friend').length, left: await repo.hasWished(c.id, device), own: c.device === device }
@@ -111,8 +110,61 @@ async function route(req, repo, env, ctx) {
   }
 
   if (GET && a === 'ics') { const c = await cardByToken(repo, b1); return { type: 'text/calendar; charset=utf-8', text: icsFor(c, origin), headers: { 'content-disposition': 'attachment; filename="christmas-wishes.ics"' } } }
-  if (GET && a === 'preview' && b1 === 'tree') { const tree = await treeBySlug(repo, b2 || 'global'), counts = await repo.counts(tree.slug); return { type: 'text/html; charset=utf-8', text: ogPage(copy.treeTitle(tree), copy.treeText(counts), `${origin}/og.jpg`) } }
-  if (GET && a === 'preview') { const c = await cardById(repo, b1); return { type: 'text/html; charset=utf-8', text: await cardPreview(repo, c, query.t != null, origin, t) } }
+  // ---- page addresses: one document for people and search engines alike (specs/003, contracts/pages.md) ----
+  if (GET && a === 'page') {
+    const html = (p, cache) => ({ type: 'text/html; charset=utf-8', text: page(p, origin), status: p.status, headers: { 'cache-control': cache || 'no-store', ...(p.noindex ? { 'x-robots-tag': 'noindex' } : {}) } })
+    if (b1 === 't') { const tree = await repo.getTree(String(b2 || '')); if (!tree || !tree.published) return html(pages.missing('tree')); return html(pages.tree({ tree: treeView(tree), counts: await repo.counts(tree.slug) }), 'public, s-maxage=60') }
+    if (b1 === 'c') {
+      const c = await repo.getCard(String(b2 || '')); if (!c || c.hidden) return html(pages.missing('card'))
+      const tree = treeView(await repo.getTree(c.tree)); if (query.t == null) return html(pages.card({ card: c, tree, late: t >= RELEASE_UTC }))
+      const br = await repo.getBranch(c.id); return html(pages.thanks({ card: c, tree, given: tree.giving ? br.gifts * tree.giving.perGift : 0 }))
+    }
+    if (b1 === 'w') { const w = await repo.getSentWish(String(b2 || '')); if (!w || w.status === 'rejected') return html(pages.missing('wish')); return html(pages.sent({ sent: w, tree: treeView(await repo.getTree(w.tree)) })) }
+    return html(pages.missing('page'))
+  }
+  if (GET && a === 'robots') return { type: 'text/plain; charset=utf-8', text: `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /me/\nDisallow: /w/\n\nSitemap: ${origin}/sitemap.xml\n`, headers: { 'cache-control': 'public, s-maxage=3600' } }
+  if (GET && a === 'sitemap') return { type: 'application/xml; charset=utf-8', text: sitemap(origin), headers: { 'cache-control': 'public, s-maxage=3600' } }
+
+  // ---- trees people create ----
+  if (POST && a === 'tree' && !b1) {
+    if (t >= FROZEN_UTC) throw fail(410, 'frozen')
+    const name = String(body.name || '').trim().replace(/\s+/g, ' ')
+    if (!name || name.length > TREE_NAME_MAX || badName(name)) throw fail(400, 'bad_name')
+    await limit(repo, device, 'tree', null, t)
+    for (let i = 0; i < 4; i++) { const tr = await repo.createTree({ slug: treeSlug(name), name, published: true, createdBy: device }); if (tr) return { slug: tr.slug, name: tr.name } }
+    throw fail(500, 'server')
+  }
+  // Anyone can report a tree. Enough reports take it down until an operator has looked.
+  if (POST && a === 'tree' && b2 === 'report') {
+    const tree = await treeBySlug(repo, b1)
+    if (tree.kind !== 'global' && await repo.reportTree(tree.slug, device, t) >= REPORTS_TO_TAKE_DOWN) await repo.takeDownTree(tree.slug, t)
+    return { ok: true }
+  }
+
+  // ---- a wish for someone who has no ornament yet ----
+  if (POST && a === 'sent' && !b1) {
+    if (t >= FROZEN_UTC) throw fail(410, 'frozen')
+    const tree = await treeBySlug(repo, body.tree || 'global'), from = firstName(body.from), to = firstName(body.to), text = String(body.text || '').trim()
+    if (!from || badName(from) || !to || badName(to)) throw fail(400, 'bad_name')
+    if (!text || text.length > WISH_MAX) throw fail(400, 'bad_wish')
+    await limit(repo, device, 'wish', null, t)
+    return repo.sendWish({ tree: tree.slug, from, to, text, device, status: flagWish(text) ? 'review' : 'ok', at: t }) // { token }: never the words, never whether it was flagged
+  }
+  if (a === 'sent' && b1) {
+    const w = await repo.getSentWish(b1); if (!w || w.status === 'rejected') throw fail(404, 'no_wish')
+    const mine = w.device === device
+    if (GET && !b2) {
+      const me = query.me ? await repo.getCardByToken(String(query.me)) : null
+      return { from: w.from, to: w.to, tree: treeView(await repo.getTree(w.tree)), claimed: !!w.claimedBy, mine, canClaimHere: !!me && !me.hidden && me.tree === w.tree && me.device !== w.device && !w.claimedBy, closed: t >= FROZEN_UTC }
+    }
+    if (POST && b2 === 'claim') {
+      if (t >= FROZEN_UTC) throw fail(410, 'frozen')
+      const me = await cardByToken(repo, body.me), out = await repo.claimSentWish(w.token, me.id, t)
+      if (out !== 'ok') throw fail(out === 'no_wish' ? 404 : out === 'claimed' || out === 'already' ? 409 : 400, out)
+      return { ok: true }
+    }
+  }
+
   if (GET && a === 'img') { const v = await repo.getPreview(b1, b2 === 'thanks' ? 'thanks' : 'invite'); if (!v) throw fail(404, 'no_image'); return { type: 'image/jpeg', b64: v, headers: { 'cache-control': 'public, max-age=3600' } } }
 
   // ---- your own branch, by private link ----
@@ -200,6 +252,7 @@ async function route(req, repo, env, ctx) {
       if (g.cap != null && g.cap < tr.giving.given) throw fail(400, 'below_given')
       return repo.setGiving(tr.slug, g) // never changes the recorded total
     }
+    if (POST && b1 === 'trees' && b3 === 'takedown') { if (!await repo.takeDownTree(String(b2), t)) throw fail(404, 'no_tree'); return { ok: true } }
     if (GET && b1 === 'measures') { const tr = await treeBySlug(repo, query.tree, true); return { ...(await repo.measures(tr.slug, RELEASE_UTC)), counts: await repo.counts(tr.slug) } }
     if (GET && b1 === 'review') return { wishes: await repo.reviewQueue() }
     if (POST && b1 === 'review') { if (body.action !== 'approve' && body.action !== 'reject') throw fail(400, 'bad_action'); const status = await repo.decideWish(b2, body.action === 'approve' ? 'ok' : 'rejected'); if (!status) throw fail(404, 'no_wish'); return { status } }
@@ -231,7 +284,7 @@ export async function handle(req, repo, env = {}) {
   try {
     const out = await route(req, repo, env, { t, device, origin })
     const extra = { ...(out.type ? out.headers : {}), ...(setCookie ? { 'set-cookie': setCookie } : {}) }
-    return out.type ? { status: 200, type: out.type, text: out.text, b64: out.b64, headers: extra } : { status: 200, json: out, headers: extra }
+    return out.type ? { status: out.status || 200, type: out.type, text: out.text, b64: out.b64, headers: extra } : { status: 200, json: out, headers: extra }
   } catch (e) {
     if (e.status) return { status: e.status, json: { error: e.error } }
     console.error(e); return { status: 500, json: { error: 'server' } }

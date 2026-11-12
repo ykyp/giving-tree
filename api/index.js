@@ -32,8 +32,8 @@ async function operator(headers) {
   } catch (e) { return false }
 }
 
+// Nothing here can fake the date or the device: those tools exist only on the local dev server.
 const env = {
-  testMode: process.env.TEST_MODE === '1', // the testing deployment only, never production
   emailEnabled: process.env.EMAIL_REMINDERS === 'on' && !!(resendKey && process.env.EMAIL_FROM), sendEmail, notify, operator,
   cronSecret: process.env.CRON_SECRET, origin: process.env.PUBLIC_ORIGIN,
   hashDevice: async id => createHash('sha256').update(salt + id).digest('hex'), // only a salted hash of the device cookie is stored
@@ -46,8 +46,7 @@ export default async function handler(req, res) {
   const path = p || req.url.split('?')[0].replace(/^\/api\//, '')
   const out = await handle({ method: req.method, path, query, body: req.body || {}, headers: req.headers }, repo, env)
   for (const [k, v] of Object.entries(out.headers || {})) res.setHeader(k, v)
-  res.setHeader('x-robots-tag', 'noindex')
-  if (out.json) { res.setHeader('cache-control', 'no-store'); res.status(out.status).json(out.json); return }
+  if (out.json) { res.setHeader('x-robots-tag', 'noindex'); res.setHeader('cache-control', 'no-store'); res.status(out.status).json(out.json); return }
   res.setHeader('content-type', out.type)
   res.status(out.status).send(out.b64 ? Buffer.from(out.b64, 'base64') : out.text)
 }
