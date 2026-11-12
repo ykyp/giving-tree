@@ -2,10 +2,9 @@ import * as THREE from 'three'
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useStore } from '../store'
-import { NAMES } from '../config'
 import { seeded, hashStr, now, easeOut } from '../lib/util'
 import { shared } from './shared'
-import { api } from '../lib/api'
+import { chime } from '../lib/audio'
 import { DESIGNS, crowdMats, tagMatAtlas, tagGeo, capGeo, capMat, cellUV, drawCell, TAG_DESIGNS, mosaicColors, mosaicGeo } from './ornamentKit'
 
 /* ---------- rope physics (verlet): a rope only pulls when it is taut ---------- */
@@ -40,14 +39,25 @@ export function hangHooks() {
 function makeOrn(name, design, color, cell, hook, r, mins) {
   return { id: crowd.nextId++, name, design, color, cell, hook, mins, ph: r() * 6.28, dir: r() < .5 ? -1 : 1, L: 0.16 + r() * 0.08, bob: null, prev: null, dropAt: 0, fs: undefined }
 }
-export function populate(brand) {
-  if (api.online && api.ornaments) return populateReal(brand, api.ornaments)
-  crowd.list = []; const r = seeded(hashStr(brand.slug) % 100000 + 3), hooks = shared.hooks.map((_, i) => i).sort(() => r() - .5)
-  const full = useStore.getState().clock.phase !== 'advent' // Christmas: the square is full of the season's ornaments
-  const n = Math.min(MAXO - 8, Math.floor(shared.hooks.length * (full ? 0.97 : 0.66)))
-  for (let k = 0; k < n; k++) {
-    const o = makeOrn(NAMES[k < 5 ? k : Math.floor(r() * NAMES.length)], Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], 8 + k, hooks[k], r, k < 5 ? [2, 5, 9, 14, 21][k] : Math.floor(30 + r() * 4000))
-    crowd.list.push(o); drawCell(o.cell, o.design, o.color, o.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
+const colorOf = (brand, o) => { const r = seeded(hashStr(o.name + o.id) % 100000 + 1); return brand.palette[Math.floor(r() * brand.palette.length)] }
+const paint = (brand, o) => drawCell(o.cell, o.design, o.color, o.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
+const minsSince = at => Math.max(0, Math.round((Date.now() - at) / 60000))
+/** Hooks the branch on show keeps for itself, and the cards that branch will hang there. */
+function branchClaim() {
+  const s = useStore.getState(), bv = s.branchView, ids = new Set(), hooks = new Set()
+  if (s.mine && (s.view === 'me' || s.heroHook >= 0)) ids.add(s.mine.id)
+  if (bv && shared.hooks[bv.hook]) { if (bv.owner) ids.add(bv.owner.id); bv.kids.forEach(k => ids.add(k.id)); hooks.add(bv.hook); branchHooks(bv.hook, Math.max(RESERVE, bv.kids.length + 3)).forEach(h => hooks.add(h)) }
+  return { ids, hooks }
+}
+function freeHookNear(hook, used) { const n = shared.hooks.length; let h = ((hook % n) + n) % n; for (let i = 0; i < n; i++, h = (h + 1) % n) if (!used.has(h)) return h; return -1 }
+/** The tree as it really is: one ornament for each real card, newest first, as many as fit. Nothing is made up. */
+export function populate(brand, ornaments = []) {
+  crowd.list = []; const { ids, hooks } = branchClaim(), used = new Set(hooks); let cell = 8
+  for (const o of ornaments) {
+    if (crowd.list.length >= MAXO - 10) break; if (ids.has(o.id)) continue
+    const hook = freeHookNear(o.hook, used); if (hook < 0) break; used.add(hook)
+    const orn = makeOrn(o.name, o.design, colorOf(brand, o), cell++, hook, seeded(hashStr(o.id) % 100000 + 1), minsSince(o.at)); orn.cid = o.id
+    crowd.list.push(orn); paint(brand, orn)
   }
   crowd.dirty = true
 }
@@ -60,25 +70,23 @@ export function applyBranch(brand, bv) {
   const taken = new Set([bv.hook, useStore.getState().heroHook]), place = (o, hook) => {
     const cells = usedCells(); let cell; for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
     if (cell === undefined) return
-    const r = seeded(hashStr(o.name + o.id) % 100000 + 1), orn = makeOrn(o.name, o.design, brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0); orn.real = true
-    crowd.list.push(orn); drawCell(cell, orn.design, orn.color, orn.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
+    const orn = makeOrn(o.name, o.design, colorOf(brand, o), cell, hook, seeded(hashStr(o.name + o.id) % 100000 + 1), 0); orn.real = true; orn.cid = o.id
+    crowd.list.push(orn); paint(brand, orn)
   }
   if (bv.owner) place(bv.owner, bv.hook)
   for (const k of bv.kids) { const hook = rs.has(k.hook) && !taken.has(k.hook) ? k.hook : res.find(h => !taken.has(h)); if (hook === undefined) break; taken.add(hook); place(k, hook) }
 }
-/** A gift arriving live: the ornament drops from above onto a free hook and swings. */
-export function addLive(brand) {
-  let free = freeHooks().filter(h => !shared.reserved.has(h)), hook, cell
-  const cells = usedCells(); for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
-  if (!free.length || cell === undefined || crowd.list.length >= MAXO) { const old = crowd.list.filter(o => !o.real).reduce((a, o) => o.mins > a.mins ? o : a, crowd.list.find(o => !o.real)); crowd.list = crowd.list.filter(o => o !== old); hook = old.hook; cell = old.cell }
-  else hook = free[Math.floor(Math.random() * free.length)]
-  crowd.list.forEach(o => o.mins += 1)
-  const name = real ? real.sender_name : NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
-  if (real && Number.isInteger(real.hook) && free.includes(real.hook)) hook = real.hook
-  const o = makeOrn(name, real ? real.design : Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0); if (real) o.cardId = real.id
-  const A = shared.hooks[hook].p; o.bob = A.clone().add(new THREE.Vector3((r() - .5) * .8, 3.5, (r() - .5) * .8)); o.prev = o.bob.clone(); o.dropAt = now()
-  drawCell(cell, o.design, o.color, name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
-  crowd.list.push(o); crowd.dirty = true; return o
+/** Someone has just hung an ornament: it drops from above onto its hook and swings. */
+export function addLive(brand, o) {
+  if (crowd.list.some(x => x.cid === o.id) || branchClaim().ids.has(o.id)) return null
+  const cells = usedCells(); let cell; for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
+  let hook = freeHookNear(o.hook, new Set([...usedHooks(), ...shared.reserved]))
+  if (hook < 0 || cell === undefined || crowd.list.length >= MAXO - 2) { // full: the oldest ornament not on the branch makes room
+    const old = crowd.list.filter(x => !x.real).reduce((a, x) => !a || x.mins > a.mins ? x : a, null); if (!old) return null
+    crowd.list = crowd.list.filter(x => x !== old); hook = old.hook; cell = old.cell }
+  const r = Math.random, orn = makeOrn(o.name, o.design, colorOf(brand, o), cell, hook, r, 0); orn.cid = o.id
+  const A = shared.hooks[hook].p; orn.bob = A.clone().add(new THREE.Vector3((r() - .5) * .8, 3.5, (r() - .5) * .8)); orn.prev = orn.bob.clone(); orn.dropAt = now()
+  paint(brand, orn); crowd.list.push(orn); crowd.dirty = true; return orn
 }
 
 const M = { cap: new THREE.Matrix4(), body: new THREE.Matrix4(), tag: new THREE.Matrix4(), t: new THREE.Matrix4(), r: new THREE.Matrix4(), s: new THREE.Matrix4() }
@@ -110,9 +118,11 @@ export default function Crowd({ brand }) {
   const caps = useMemo(() => { const m = new THREE.InstancedMesh(capGeo, capMat, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
   const threads = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXO * 6), 3)); const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcaa65a, transparent: true, opacity: .8 })); l.frustumCulled = false; return l }, [])
 
-  const christmas = useStore(s => s.clock.phase !== 'advent'), branchView = useStore(s => s.branchView)
-  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color); populate(brand); applyBranch(brand, useStore.getState().branchView) }, [brand, meshes, christmas])
-  useEffect(() => { applyBranch(brand, branchView) }, [branchView])
+  const branchView = useStore(s => s.branchView), treeRev = useStore(s => s.treeRev), mineId = useStore(s => s.mine?.id), arrivals = useStore(s => s.arrivals)
+  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color) }, [brand, meshes])
+  // the tree shows what the server says is on it, plus the branch in view
+  useEffect(() => { const st = useStore.getState(); populate(brand, st.ornaments); applyBranch(brand, st.branchView) }, [brand, meshes, treeRev, branchView, mineId])
+  useEffect(() => { const st = useStore.getState(); for (const o of arrivals) if (addLive(brand, o) && (st.phase === 'explore' || st.phase === 'greeting')) { st.toastMsg(`${o.name} just hung an ornament`); chime([1568], 0, .04) } }, [arrivals])
 
   function rebuild() {
     meshes.forEach(m => m.userData.list = [])

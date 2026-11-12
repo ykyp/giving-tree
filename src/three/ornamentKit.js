@@ -67,7 +67,7 @@ export function paintSurface(x, x0, y0, k, design, color, name, opt = {}) {
     x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(x0 + s(128), y0 + s(20), s(7), 0, 7); x.fill(); x.globalCompositeOperation = 'source-over'
     x.strokeStyle = '#b8891c'; x.lineWidth = s(2.5); x.beginPath(); x.arc(x0 + s(128), y0 + s(20), s(9.5), 0, 7); x.stroke()
     letters(x, nm, x0 + s(128), y0 + s(64), '#43280f', s(big ? 40 : 50), HAND, { ...opt, shadow: false, weight: '600' })
-    x.font = `600 ${s(21)}px ${HAND}`; x.fillStyle = '#6b4a22'; x.textAlign = 'center'; x.fillText(`gave ${amt(opt.per ?? 10)}`, x0 + s(128), y0 + s(101))
+    x.font = `600 ${s(21)}px ${HAND}`; x.fillStyle = '#6b4a22'; x.textAlign = 'center'; if (opt.per) x.fillText(`gave ${amt(opt.per)}`, x0 + s(128), y0 + s(101))
   }
   x.restore()
 }

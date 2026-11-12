@@ -1,24 +1,23 @@
 import { create } from 'zustand'
-import { BRANDS, NAMES } from './config'
 import { hashStr, now } from './lib/util'
 import { api, bootApi, get as apiGet, post as apiPost, newDeviceId } from './lib/api'
 import { clockOf, localDay } from '../shared/season.js'
 
 const lsGet = k => { try { return localStorage.getItem(k) } catch (e) { return null } }
 const lsSet = (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} }
-/** The device remembers its own branch for each tree, so the original link finds it again. */
+/** The device remembers its own branch on each tree, so the original link finds it again. */
 const allMine = () => { try { return JSON.parse(lsGet('gt3-mine') || '{}') } catch (e) { return {} } }
-const saveMine = c => lsSet('gt3-mine', JSON.stringify({ ...allMine(), [c.brand]: { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent } }))
-export const mineFor = brand => allMine()[brand] || null
+const saveMine = c => lsSet('gt3-mine', JSON.stringify({ ...allMine(), [c.tree]: { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree } }))
+const forgetMine = slug => { const all = allMine(); delete all[slug]; lsSet('gt3-mine', JSON.stringify(all)) }
+export const mineFor = slug => allMine()[slug] || null
 
-for (const b of Object.values(BRANDS)) b.extra = []
-
-let demoDate = lsGet('gt-demo-date') || '', ticking = null
+export const GLOBAL = { slug: 'global', name: 'The Giving Tree', kind: 'global', giving: null }
+let demoDate = lsGet('gt-demo-date') || '', ticking = null, polling = null
 const clockNow = () => demoDate ? new Date(demoDate) : new Date()
 const today = () => localDay(clockNow())
-const SAMPLE_WISHES = ['A year with fewer spreadsheets and more sea swims.', 'I hope the new house feels like home by spring.', 'Health for your mum, and time for you.', 'More long lunches. You deserve them.', 'That you finally get that dog.', 'Good news, kind people, and enough sleep.']
-
 const wrapUp = s => s.parcels.find(p => p.kind === 'self' && !p.opened) ? 'selfwish' : 'explore'
+/** Screens where the whole tree is in view, so newly hung ornaments are worth fetching. */
+const WATCHING = new Set(['greeting', 'explore', 'branch', 'crown', 'dark'])
 
 /**
  * Flow phases
@@ -28,25 +27,24 @@ const wrapUp = s => s.parcels.find(p => p.kind === 'self' && !p.opened) ? 'selfw
  * tree page, keepsake: explore
  */
 export const useStore = create((set, get) => ({
-  view: 'send', brandKey: 'mosaicads', from: 'Maria',
+  view: 'send', from: '',
   phase: 'arrival', phaseAt: 0, run: 0,
   sel: 0, design: 0, myName: '', engraveTimes: [],
   heroHook: -1, openResult: null,
-  live: false, sound: true, tier: 'auto', fps: 60,
+  sound: true, tier: 'auto', fps: 60,
   focus: null, poi: null, exploreMode: 'walk', toast: null, toastAt: 0, sheetOpen: false, linkPreview: null,
   tick: 0,
+  // the tree, as the server has it. Nothing here is invented.
+  tree: GLOBAL, counts: { ornaments: 0, wishes: 0 }, ornaments: [], cursor: 0, treeRev: 0, arrivals: [],
   // the two visits
   apiInfo: null, unreachable: false, clock: clockOf(clockNow()), demoDate,
   mine: null, cardP: null, parent: null, thanksFrom: null, me: null, parcels: [], wishOpen: null, branchName: null,
   branchView: null, // { hook, owner?, kids } the branch shown on the tree (no owner: the hero ornament is the owner)
 
-  brand: () => BRANDS[get().brandKey],
   setPhase: phase => set({ phase, phaseAt: now() }),
   restart: (view = get().view) => set(s => ({ view, phase: view === 'tree' || view === 'keepsake' ? 'explore' : 'arrival', phaseAt: now(), run: s.run + 1, heroHook: -1, openResult: null, focus: null, poi: null, exploreMode: view === 'keepsake' ? 'orbit' : 'walk',
     engraveTimes: [], myName: view === 'send' ? '' : s.myName, design: view === 'open' ? (s.parent ? s.parent.design : hashStr(s.from.toLowerCase()) % 8) : s.design,
-    parent: view === 'open' ? s.parent : null, branchView: view === 'open' ? s.branchView : null, cardP: null, me: null, parcels: [], wishOpen: null, branchName: null, mine: mineFor(s.brandKey) })),
-  setBrand: brandKey => { set({ brandKey }); get().syncTree(); get().restart(get().view === 'open' || get().view === 'me' ? 'send' : get().view) },
-  setFrom: from => { set({ from: (from.trim().split(/\s+/)[0] || 'Maria').slice(0, 12) }); if (get().view === 'open') get().openDemo() },
+    parent: view === 'open' ? s.parent : null, branchView: view === 'open' ? s.branchView : null, cardP: null, me: null, parcels: [], wishOpen: null, branchName: null, mine: mineFor(s.tree.slug) })),
   toastMsg: msg => set({ toast: msg, toastAt: now() }),
   typeName: name => set(s => {
     const t = [...s.engraveTimes]; const n = now()
@@ -59,28 +57,53 @@ export const useStore = create((set, get) => ({
   boot: async () => {
     await bootApi()
     if (!api.info.ok) return set({ unreachable: true }) // the server exists but can't serve: say so rather than pretend
-    api.clockIso = demoDate && api.info.devClock ? new Date(demoDate).toISOString() : null
-    if (!api.info.devClock) demoDate = ''
-    set({ apiInfo: api.info, unreachable: false, live: !!api.info.devClock, demoDate }); get().tickClock()
+    api.clockIso = demoDate && api.info.testMode ? new Date(demoDate).toISOString() : null
+    if (!api.info.testMode) demoDate = ''
+    set({ apiInfo: api.info, unreachable: false, demoDate }); get().tickClock()
     if (!ticking) ticking = setInterval(() => get().tickClock(), 30000)
-    await get().syncTree(); await get().route()
+    if (!polling) polling = setInterval(() => get().pollTree(), 8000)
+    await get().route()
   },
+  /**  /  the global tree  ·  /t/{slug}  a community's tree  ·  /c/{id}  a card  ·  /me/{token}  your own branch  */
   route: async () => {
-    const m = location.pathname.match(/^\/(c|me)\/([\w-]+)/), q = new URLSearchParams(location.search)
+    const m = location.pathname.match(/^\/(c|me|t)\/([\w-]+)/), q = new URLSearchParams(location.search)
     if (m?.[1] === 'me') return get().openMe(m[2])
     if (m?.[1] === 'c') return get().openCard(m[2], { thanks: q.has('t'), preview: q.has('preview') })
-    get().restart(get().clock.phase === 'keepsake' ? 'keepsake' : 'send')
+    return get().openTree(m?.[1] === 't' ? m[2] : 'global')
   },
   tickClock: () => { const c = clockOf(clockNow()), o = get().clock; if (c.phase !== o.phase || c.pulse !== o.pulse || c.day !== o.day) set({ clock: c }) },
-  setDemoDate: v => { demoDate = v; lsSet('gt-demo-date', v); api.clockIso = v ? new Date(v).toISOString() : null; set({ demoDate: v }); get().tickClock(); const s = get()
-    if (s.view === 'me' && s.mine) return get().openMe(s.mine.token); if (s.clock.phase === 'keepsake') return get().restart('keepsake'); if (s.view === 'keepsake') get().restart('send'); else get().restart() },
-  syncTree: async () => { const k = get().brandKey; try { const t = await apiGet(`tree/${k}`); BRANDS[k].opened = t.opened; get().bump() } catch (e) {} },
+
+  /** Loads a tree from the server: its name, what it shows of giving (usually nothing), and the ornaments really on it. */
+  loadTree: async slug => {
+    let t
+    try { t = await apiGet(`tree/${slug}`) } catch (e) {
+      if (e.code !== 'no_tree' || slug === 'global') throw e
+      get().toastMsg("We couldn't find that tree, so here's the Giving Tree."); t = await apiGet('tree/global')
+    }
+    set(s => ({ tree: t.tree, counts: t.counts, ornaments: t.ornaments, cursor: t.cursor, treeRev: s.treeRev + 1, mine: mineFor(t.tree.slug) }))
+    return t.tree
+  },
+  /** Arriving at a tree. A phone that already has a branch here goes to it; after New Year everyone gets the keepsake. */
+  openTree: async (slug, { fresh = false } = {}) => {
+    let tree; try { tree = await get().loadTree(slug) } catch (e) { return set({ unreachable: true }) }
+    const mine = mineFor(tree.slug)
+    if (mine && !fresh) return get().openMe(mine.token)
+    get().restart(get().clock.phase === 'keepsake' ? 'keepsake' : 'send')
+  },
+  /** New ornaments hung by other people, while the tree is on screen. */
+  pollTree: async () => {
+    const s = get(); if (s.unreachable || !s.apiInfo || document.hidden || !WATCHING.has(s.phase)) return
+    let t; try { t = await apiGet(`tree/${s.tree.slug}?since=${s.cursor}`) } catch (e) { return }
+    if (get().tree.slug !== t.tree.slug) return
+    const known = new Set(get().ornaments.map(o => o.id)), fresh = t.ornaments.filter(o => !known.has(o.id))
+    set(st => ({ tree: t.tree, counts: t.counts, cursor: t.cursor, ornaments: [...fresh, ...st.ornaments].slice(0, 200), arrivals: fresh.filter(o => o.id !== st.mine?.id), tick: st.tick + 1 }))
+  },
 
   /** Someone arrives on a card link. */
   openCard: async (id, { thanks = false, preview = false } = {}) => {
-    let card; try { card = await apiGet(`card/${id}`) } catch (e) { get().toastMsg("We couldn't find that card."); return get().restart('send') }
-    set({ brandKey: card.brand }); await get().syncTree()
-    const mine = mineFor(card.brand)
+    let card; try { card = await apiGet(`card/${id}`) } catch (e) { get().toastMsg("We couldn't find that card."); return get().openTree('global') }
+    try { await get().loadTree(card.tree.slug) } catch (e) { return set({ unreachable: true }) }
+    const mine = mineFor(card.tree.slug)
     // This phone already has a branch: go straight to it when the link is its own card, a thank-you, or the card it was
     // invited by and has already wished. If it skipped the wish earlier, the link still lets it leave one.
     if (mine && !preview && (mine.id === id || thanks || (mine.parent === id && card.left))) {
@@ -91,14 +114,15 @@ export const useStore = create((set, get) => ({
     set({ parent: card, from: card.name, design: card.design, sel: card.design, thanksFrom: thanks ? card.name : null, branchView: { hook: card.hook, owner: card, kids: card.branch.kids } })
     get().restart('open')
   },
-  openDemo: async () => { const s = get(); const { id } = await apiPost('demo/card', { brand: s.brandKey, name: s.from, design: hashStr(s.from.toLowerCase()) % 8, hook: 24 }); get().openCard(id, { preview: true }) },
 
   /** Someone arrives on their private Christmas link. */
   openMe: async (token, thanksFrom = null) => {
-    let m; try { m = await apiGet(`me/${token}?day=${today()}`) } catch (e) { get().toastMsg("We couldn't find that branch."); return get().restart('send') }
-    const c = m.card, b = BRANDS[c.brand]; b.opened = m.tree.opened; saveMine(c)
-    if (get().clock.phase === 'keepsake' && !m.wishes.length) { set({ brandKey: c.brand }); return get().restart('keepsake') }
-    set(s => ({ view: 'me', brandKey: c.brand, me: m, mine: mineFor(c.brand), myName: c.name, design: c.design, sel: c.design, heroHook: c.hook, parcels: m.wishes, wishOpen: null, branchName: m.branch.name, parent: null, focus: null, poi: null, exploreMode: 'walk',
+    let m; try { m = await apiGet(`me/${token}?day=${today()}`) } catch (e) { get().toastMsg("We couldn't find that branch."); forgetMine(get().tree.slug); set({ mine: null }); return get().restart('send') }
+    if (m.removed) { forgetMine(m.tree.slug); try { await get().loadTree(m.tree.slug) } catch (e) {} get().toastMsg('That ornament has been removed.'); return get().restart('send') }
+    const c = m.card; saveMine(c)
+    if (get().tree.slug !== c.tree || !get().treeRev) { try { await get().loadTree(c.tree) } catch (e) {} }
+    if (get().clock.phase === 'keepsake' && !m.wishes.length) return get().restart('keepsake')
+    set(s => ({ view: 'me', tree: m.tree, counts: m.counts, me: m, mine: mineFor(c.tree), myName: c.name, design: c.design, sel: c.design, heroHook: c.hook, parcels: m.wishes, wishOpen: null, branchName: m.branch.name, parent: null, focus: null, poi: null, exploreMode: 'walk',
       branchView: { hook: c.hook, kids: m.branch.kids }, thanksFrom, phase: 'mearrive', phaseAt: now(), run: s.run + 1 }))
     if (thanksFrom) get().toastMsg(`${thanksFrom} says thank you`)
   },
@@ -110,13 +134,15 @@ export const useStore = create((set, get) => ({
   /** Saves the ornament as soon as it is on the tree. Everything after this hangs off the card. */
   createCard: () => {
     const s = get(); if (s.cardP) return s.cardP
-    const p = apiPost('card', { brand: s.brandKey, name: s.myName, design: s.design, hook: s.heroHook, parent: s.parent?.id }).then(c => { saveMine(c); set({ mine: mineFor(c.brand) }); return c }).catch(e => { set({ cardP: null }); throw e })
+    const p = apiPost('card', { tree: s.tree.slug, name: s.myName, design: s.design, hook: s.heroHook, parent: s.parent?.id })
+      .then(c => { saveMine(c); set(st => ({ mine: mineFor(c.tree), counts: { ...st.counts, ornaments: st.counts.ornaments + 1 } })); return c }).catch(e => { set({ cardP: null }); throw e })
     set({ cardP: p }); return p
   },
   cardLink: (id, thanks) => `${location.origin}/c/${id}${thanks ? '?t=1' : ''}`,
+  /** Tells the server this card was opened. Whether that gives anything is the server's call (usually there is nothing to give). */
   tryOpen: () => {
-    const s = get(), b = BRANDS[s.brandKey]; if (!s.parent) return
-    apiPost('open', { id: s.parent.id }).then(r => { if (r.tree) b.opened = r.tree.opened; if (r.counted) b.extra.unshift({ n: s.from, you: true }); set(st => ({ openResult: r, tick: st.tick + 1 })) }).catch(() => set({ openResult: { counted: false, reason: 'error' } }))
+    const s = get(); if (!s.parent) return
+    apiPost('open', { id: s.parent.id }).then(r => set(st => ({ openResult: r, tree: r.tree || st.tree, tick: st.tick + 1 }))).catch(() => set({ openResult: { counted: false, reason: 'error' } }))
   },
   sealSelf: async text => { const c = await get().createCard(); const r = await apiPost(`me/${c.token}/wish`, { text }); set(s => ({ parcels: [...s.parcels, { id: r.id, from: s.myName, kind: 'self', opened: false }] })) },
   sealFriend: async text => { const s = get(); await apiPost('wish', { to: s.parent.id, from: s.myName || s.mine?.name, text }); set(st => ({ parent: { ...st.parent, left: true } })) },
@@ -127,12 +153,12 @@ export const useStore = create((set, get) => ({
     if (!p.opened) { set(st => ({ parcels: st.parcels.map(x => x.id === id ? { ...x, opened: true } : x) })); apiPost(`me/${s.mine.token}/opened`, { id, day: today() }).catch(() => {}) } },
   reportWish: async id => { const s = get(); try { await apiPost(`me/${s.mine.token}/report`, { id, day: today() }); set(st => ({ parcels: st.parcels.filter(p => p.id !== id), wishOpen: null })); get().toastMsg("Thanks. We've taken it down and will review it.") } catch (e) { get().toastMsg("That didn't send. Try again.") } },
 
-  // ---- demo panel ----
-  resetDevice: () => { newDeviceId(); lsSet('gt3-mine', '{}'); for (const b of Object.values(BRANDS)) b.extra = []; set({ myName: '', mine: null }); get().toastMsg('This phone is reset. Cards can give again.'); get().restart('send') },
-  demoFriend: async () => { const s = get(); if (!s.mine) return get().toastMsg('Hang your ornament first.')
-    const name = NAMES[Math.floor(Math.random() * NAMES.length)]
-    await apiPost('demo/friend', { to: s.mine.id, name, design: Math.floor(Math.random() * 8), hook: s.mine.hook + 1, text: SAMPLE_WISHES[Math.floor(Math.random() * SAMPLE_WISHES.length)] })
+  // ---- test mode only (the panel that calls these is not shown on the public site) ----
+  setDemoDate: v => { demoDate = v; lsSet('gt-demo-date', v); api.clockIso = v ? new Date(v).toISOString() : null; set({ demoDate: v }); get().tickClock(); const s = get()
+    if (s.view === 'me' && s.mine) return get().openMe(s.mine.token); if (s.clock.phase === 'keepsake') return get().restart('keepsake'); if (s.view === 'keepsake') get().restart('send'); else get().restart() },
+  openDemo: async name => { const s = get(); const { id } = await apiPost('demo/card', { tree: s.tree.slug, name, design: hashStr(name.toLowerCase()) % 8, hook: 24 }); get().openCard(id, { preview: true }) },
+  resetDevice: () => { newDeviceId(); lsSet('gt3-mine', '{}'); set({ myName: '', mine: null }); get().toastMsg('This phone is reset: it is a new visitor.'); get().openTree(get().tree.slug) },
+  demoFriend: async (name, text) => { const s = get(); if (!s.mine) return get().toastMsg('Hang your ornament first.')
+    await apiPost('demo/friend', { to: s.mine.id, name, design: Math.floor(Math.random() * 8), hook: s.mine.hook + 1, text })
     get().toastMsg(`${name} hung an ornament and left a wish`); if (s.view === 'me') get().openMe(s.mine.token) },
 }))
-
-export const randomName = () => NAMES[Math.floor(Math.random() * NAMES.length)]
