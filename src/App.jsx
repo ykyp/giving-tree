@@ -38,7 +38,12 @@ export default function App() {
   useEffect(() => { useStore.getState().boot() }, [])
   // real card and Christmas links are the phone alone; the notes and controls are for the demo
   const testMode = useStore(s => !!s.apiInfo?.testMode), solo = !testMode || !Panel // the public site is the card and nothing else
-  const dpr = tier === 'high' ? [1, 2] : tier === 'mid' ? [1, 1.5] : [1, 1]
+  // Sharpness: the tier's limit, or less on a very large window so a big screen never draws more than about 3.6 million
+  // pixels a frame (a phone at 2x draws under one million).
+  const [area, setArea] = useState(() => window.innerWidth * window.innerHeight)
+  useEffect(() => { const on = () => setArea(window.innerWidth * window.innerHeight); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on) }, [])
+  const maxDpr = Math.max(1, Math.min(tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1, Math.sqrt(3.6e6 / area)))
+  const dpr = [1, maxDpr]
   return (
     <div className={'wrap' + (solo ? ' solo' : '')}>
       {!solo && Panel && <Suspense fallback={null}><Panel tier={tier} /></Suspense>}
