@@ -8,6 +8,17 @@
 
 **Input**: User description: "The Giving Tree: two visits in December" (product document, 9 Nov 2026). People visit twice: once between 1 and 24 December to hang an ornament and seal a wish inside it, and once between 25 and 31 December to open the wishes their friends and family left them. The first share is an ask ("leave me a Christmas wish"); the second is a thank-you ("look what we gave together"). Both shares release a gift from the brand's pot.
 
+## Amendment (2026-11-12, from spec 002-production-launch)
+
+The owner decided the public Giving Tree is about sending wishes to friends, with no charity or sponsor needed. Giving is now an option per tree and is **off by default**. Wherever this spec says a share or an open "releases a gift", shows an amount, or names a brand or charity (the idea summary, Story 2 scenario 1, Story 5, FR-006, FR-019, FR-024 to FR-026, FR-036, the gift measures in FR-038, SC-008 and SC-010), that applies only to a tree with giving switched on. With giving off:
+
+- opening a card shows the sender's ornament and the invitation to hang, with no gift line;
+- the Christmas summary shows ornaments on the branch and wishes shared, with no amount;
+- the thank-you message thanks people without an amount;
+- no MosaicAds branding appears.
+
+Everything else in this spec (branches, sealed wishes, the time lock, privacy, moderation, the return visit, the finale, the keepsake, deletion on 1 February 2027) is unchanged.
+
 ## Clarifications
 
 ### Session 2026-11-12

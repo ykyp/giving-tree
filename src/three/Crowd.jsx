@@ -5,7 +5,6 @@ import { useStore } from '../store'
 import { NAMES } from '../config'
 import { seeded, hashStr, now, easeOut } from '../lib/util'
 import { shared } from './shared'
-import { api } from '../lib/api'
 import { DESIGNS, crowdMats, tagMatAtlas, tagGeo, capGeo, capMat, cellUV, drawCell, TAG_DESIGNS, mosaicColors, mosaicGeo } from './ornamentKit'
 
 /* ---------- rope physics (verlet): a rope only pulls when it is taut ---------- */
@@ -41,7 +40,6 @@ function makeOrn(name, design, color, cell, hook, r, mins) {
   return { id: crowd.nextId++, name, design, color, cell, hook, mins, ph: r() * 6.28, dir: r() < .5 ? -1 : 1, L: 0.16 + r() * 0.08, bob: null, prev: null, dropAt: 0, fs: undefined }
 }
 export function populate(brand) {
-  if (api.online && api.ornaments) return populateReal(brand, api.ornaments)
   crowd.list = []; const r = seeded(hashStr(brand.slug) % 100000 + 3), hooks = shared.hooks.map((_, i) => i).sort(() => r() - .5)
   const full = useStore.getState().clock.phase !== 'advent' // Christmas: the square is full of the season's ornaments
   const n = Math.min(MAXO - 8, Math.floor(shared.hooks.length * (full ? 0.97 : 0.66)))
@@ -73,9 +71,8 @@ export function addLive(brand) {
   if (!free.length || cell === undefined || crowd.list.length >= MAXO) { const old = crowd.list.filter(o => !o.real).reduce((a, o) => o.mins > a.mins ? o : a, crowd.list.find(o => !o.real)); crowd.list = crowd.list.filter(o => o !== old); hook = old.hook; cell = old.cell }
   else hook = free[Math.floor(Math.random() * free.length)]
   crowd.list.forEach(o => o.mins += 1)
-  const name = real ? real.sender_name : NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
-  if (real && Number.isInteger(real.hook) && free.includes(real.hook)) hook = real.hook
-  const o = makeOrn(name, real ? real.design : Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0); if (real) o.cardId = real.id
+  const name = NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
+  const o = makeOrn(name, Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0)
   const A = shared.hooks[hook].p; o.bob = A.clone().add(new THREE.Vector3((r() - .5) * .8, 3.5, (r() - .5) * .8)); o.prev = o.bob.clone(); o.dropAt = now()
   drawCell(cell, o.design, o.color, name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
   crowd.list.push(o); crowd.dirty = true; return o
