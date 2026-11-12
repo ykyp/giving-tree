@@ -34,7 +34,8 @@ const tgOf = (B, s) => new THREE.Vector3(Math.cos(B.a), B.droop + 0.12 * s, Math
 }
 
 function twigTexture() {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'); const r = seeded(31)
+  // drawn at twice the size it is laid out in, so needles stay crisp when a branch fills a phone screen
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d'); x.scale(2, 2); const r = seeded(31)
   const stemY = s => 128 - Math.sin(s * 3.1) * 6
   const needle = (px, py, ang, len, w, dark) => { const ex = px + Math.cos(ang) * len, ey = py + Math.sin(ang) * len
     const g = x.createLinearGradient(px, py, ex, ey); g.addColorStop(0, dark ? '#0c2618' : '#143522'); g.addColorStop(.55, dark ? '#1b4a2e' : '#275f39'); g.addColorStop(1, dark ? '#346f45' : '#5b9460')
@@ -47,7 +48,7 @@ function twigTexture() {
       for (const side of [-1, 1]) { const lean = (0.12 + r() * 0.5) * 0.9; needle(px, py, side < 0 ? -Math.PI / 2 + lean : Math.PI / 2 - lean, (44 + r() * 22) * taper, pass ? 3 : 3.4, pass === 0) } }
   }
   x.strokeStyle = '#5a4028'; x.lineWidth = 4; x.beginPath(); for (let s = 0; s <= 1; s += 0.02) { const px = 10 + s * 490, py = stemY(s); s ? x.lineTo(px, py) : x.moveTo(px, py) } x.stroke()
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t
 }
 
 export default function Tree({ tier, brand }) {

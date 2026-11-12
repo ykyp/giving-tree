@@ -18,11 +18,18 @@ import { DEMO } from './lib/api'
 // Test tools: only when run on a developer's machine, or in the single-file demo. Never in the site's own build.
 const Panel = import.meta.env.DEV || DEMO ? lazy(() => import('./ui/Panel')) : null
 
+/**
+ * How much scene detail a device gets (branch cards, snow, edge smoothing). This is not sharpness: see the pixel ratio
+ * below. Browsers hide what a phone really is, so guess generously and let the frame rate correct it.
+ */
 function detectTier() {
   try { if (window.__tier) return window.__tier
-    const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent), cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 4
+    const ua = navigator.userAgent, cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory // Android Chrome only
+    const mobile = /Android|iPhone|iPad|Mobile/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua)) // iPads say they are Macs
     if (!mobile) return cores >= 8 ? 'high' : 'mid'
-    return cores >= 6 && mem >= 4 ? 'mid' : 'low' } catch (e) { return 'mid' }
+    if (/Android/i.test(ua)) return (mem && mem <= 2) || cores <= 4 ? 'low' : 'mid'
+    return 'mid' // iPhones and iPads: no way to tell them apart, and even old ones manage this
+  } catch (e) { return 'mid' }
 }
 const hasWebGL2 = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch (e) { return false } })()
 
@@ -38,12 +45,17 @@ export default function App() {
   useEffect(() => { useStore.getState().boot() }, [])
   // real card and Christmas links are the phone alone; the notes and controls are for the demo
   const testMode = useStore(s => !!s.apiInfo?.testMode), solo = !testMode || !Panel // the public site is the card and nothing else
-  // Sharpness: the tier's limit, or less on a very large window so a big screen never draws more than about 3.6 million
-  // pixels a frame (a phone at 2x draws under one million).
+  // Sharpness is separate from detail. A phone screen packs 2 to 3 pixels into each point, so drawing at 1x and
+  // stretching looks blocky. Draw at the screen's own density up to 2x (1.5x on the weakest devices), but never more
+  // than about 3.6 million pixels a frame, which only matters on big screens (a phone at 2x draws about one million).
   const [area, setArea] = useState(() => window.innerWidth * window.innerHeight)
   useEffect(() => { const on = () => setArea(window.innerWidth * window.innerHeight); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on) }, [])
-  const maxDpr = Math.max(1, Math.min(tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1, Math.sqrt(3.6e6 / area)))
-  const dpr = [1, maxDpr]
+  const screenDpr = Math.max(1, window.devicePixelRatio || 1)
+  const maxDpr = Math.max(1, Math.min(screenDpr, tier === 'low' ? 1.5 : 2, Math.sqrt(3.6e6 / area)))
+  // If the frame rate drops, give up sharpness a step at a time (and take it back when things recover). Only when the
+  // picture is already at its softest and still too slow does the device lose scene detail.
+  const [ease, setEase] = useState(1)
+  const dpr = Math.round((1 + (maxDpr - 1) * ease) * 4) / 4
   return (
     <div className={'wrap' + (solo ? ' solo' : '')}>
       {!solo && Panel && <Suspense fallback={null}><Panel tier={tier} /></Suspense>}
@@ -52,7 +64,9 @@ export default function App() {
           <Canvas className="gl" dpr={dpr} flat gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
             camera={{ fov: 40, near: .1, far: 700, position: [6, 30, 118] }} onCreated={({ gl }) => { gl.setClearColor('#0b1029') }}>
             <fogExp2 attach="fog" args={['#141b40', .0115]} />
-            <PerformanceMonitor onDecline={() => setAutoTier(t => t === 'high' ? 'mid' : 'low')} flipflops={2} />
+            {/* "fast enough" is set a little under the screen's own rate: a phone locked at 60 never measures above 60, and would otherwise never get its sharpness back after a slow moment such as loading */}
+            <PerformanceMonitor factor={1} step={.25} bounds={rate => rate > 100 ? [50, 90] : [38, 54]} onChange={({ factor }) => setEase(factor)}
+              onDecline={({ factor }) => { if (factor <= 0) setAutoTier(t => t === 'high' ? 'mid' : 'low') }} />
             <Suspense fallback={null}>
               <Environment /><Sky /><Ground /><Lights />
               <Village brand={brand} />
