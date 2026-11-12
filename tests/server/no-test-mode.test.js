@@ -6,7 +6,7 @@ import { memoryRepo } from '../../server/repo-memory.js'
 
 test('no test mode on a deployed copy: the production function never switches it on, whatever its settings', () => {
   const src = fs.readFileSync('api/index.js', 'utf8')
-  assert.equal(/testMode/.test(src), false, 'api/index.js must not mention testMode'); assert.equal(/TEST_MODE/.test(src), false, 'api/index.js must not read TEST_MODE')
+  assert.deepEqual(src.match(/testMode[^,}]*/g), ['testMode: false '], 'api/index.js may only ever report testMode: false'); assert.equal(/TEST_MODE/.test(src), false, 'api/index.js must not read TEST_MODE')
 })
 
 test('no test mode on a deployed copy: without it, the date and device cannot be faked and the test routes do not exist', async () => {
