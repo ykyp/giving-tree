@@ -89,6 +89,15 @@ A trial merge reports conflicts in nine files: `page.css`, `src/App.jsx`, `src/l
 
 - **Decision**: Keep the single bundle but show the opening screen from static HTML and CSS in `index.html` before the script arrives, and preload the fonts. Measure on a throttled 4G profile; if first interaction misses 5 seconds, split the 3D scene from the shell with one dynamic import (the "single file" constraint applies only to the demo build).
 
+### R15. Changes made while building (2026-11-12)
+
+- **The remote database was empty.** Nothing from `origin/main`'s `setup.sql` had been applied to the Supabase project (`ozltvehivcoavbytbmov`), so R3's "one migration on top" became a clean schema: `0001_giving_tree.sql` (tables), `0002_functions.sql` (`record_open`, `remove_card`, `purge_personal`) and `0003_purge_schedule.sql`. The older migration files and `setup.sql` are removed.
+- **The server uses Postgres directly, not the Supabase SDK** (replaces the SDK part of R2 and the plan's dependency note). `server/repo-postgres.js` uses the `postgres` driver over the pooled address the Vercel integration provides (`POSTGRES_URL`). Reason: the whole rules suite can then run against the real SQL on any Postgres, with no Supabase stack or Docker. `@supabase/supabase-js` is no longer a dependency.
+- **Times are stored as milliseconds** (`bigint`), exactly as the rules pass them, so the faked clock in tests and the real clock behave the same.
+- **No table is readable from the browser.** Row-level security is on with no policies, so the public API keys see nothing.
+- **Preview images stay in the database** (`previews` table, at most about 200 KB each) instead of Supabase Storage (R12): one fewer service to configure.
+- **Operator sign-in** (R9) is checked by asking Supabase Auth who the session belongs to and looking the email up in `operators`. The operator screen itself is still to build.
+
 ## Work list (input to `/speckit-tasks`)
 
 | # | Work | Spec |

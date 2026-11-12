@@ -28,17 +28,20 @@ Both need `Authorization: Bearer $CRON_SECRET`.
 
 ## Configuration
 
+See `.env.example` for the full list with notes.
+
 | Name | Where | Purpose |
 |---|---|---|
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` | Set by the Supabase integration | Database (service key: server only). The anon key is used only by `/ops` sign-in |
-| `DEVICE_SALT` | Production and testing, different values | Salts the device hash |
+| `POSTGRES_URL` | Set by the Supabase integration | The pooled database address. The server's only way in |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Set by the Supabase integration | Only to check who an operator's sign-in belongs to |
+| `DEVICE_SALT` | Production and testing, different values | Salts the device hash. Never change after launch |
 | `PUBLIC_ORIGIN` | Both | The site's own address |
 | `CRON_SECRET` | Both | Cron access |
-| `OPS_WEBHOOK_URL` | Production | Where operator notifications go |
+| `OPS_WEBHOOK_URL` | Production, optional | Where operator notices go |
 | `TEST_MODE`, `VITE_TEST_MODE` | **Testing deployment only** | Fake date and device, demo panel, `demo/*` routes |
 | `EMAIL_REMINDERS`, `RESEND_API_KEY`, `EMAIL_FROM` | Off at launch | Reminder emails |
 
-Removed: `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `UPSTASH_REDIS_REST_*`, `ADMIN_SECRET`.
+Not used: `SUPABASE_SERVICE_ROLE_KEY` (the server does not use the Supabase SDK), Redis settings, `ADMIN_SECRET`.
 
 ## Two deployments
 

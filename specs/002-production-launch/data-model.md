@@ -2,6 +2,8 @@
 
 **Date**: 2026-11-12 · **Plan**: [plan.md](./plan.md) · Database: PostgreSQL on Supabase. Starts from `supabase/migrations/0001` to `0003` on `origin/main`; this file describes the result after `0004_trees_two_visits.sql` and `0005_functions.sql`.
 
+> **As built (2026-11-12):** the source of truth is `supabase/migrations/`. It follows this document with the differences listed in research.md R15: a clean schema instead of a migration on top of the earlier one; ids are short text ids made by the server; times are milliseconds (`bigint`, column `at`); column names are shorter (`wishes.device`, `opened`, `reported`, `cards.hidden`, `trees.agreement_signed`, `starts_on`, `ends_on`); preview images are in a `previews` table; the `limits` table has one `key` column; and `tree_measures` is computed by the server instead of a view.
+
 All tables have row-level security on and no access for the browser's roles. Everything goes through the Function with the service key.
 
 ## Tables
