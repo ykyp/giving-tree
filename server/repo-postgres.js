@@ -61,6 +61,7 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
       if (wiped()) return null
       return toWish((await sql`insert into wishes (id, card_id, from_name, body, kind, device, status, at) values (${rid(12)}, ${to}, ${from}, ${text}, ${kind}, ${device}, ${status}, ${at}) on conflict do nothing returning *`)[0]) || null
     },
+    async wishedOn(slug, device) { return wiped() ? [] : (await sql`select distinct w.card_id from wishes w join cards c on c.id = w.card_id where c.tree = ${slug} and w.kind = 'friend' and w.device = ${device}`).map(r => r.card_id) },
     async hasWished(cardId, device) { return !wiped() && (await sql`select 1 from wishes where card_id = ${cardId} and kind = 'friend' and device = ${device}`).length > 0 },
     async wishesFor(cardId) { return wiped() ? [] : (await sql`select * from wishes where card_id = ${cardId} order by at, id`).map(toWish) },
     async getWish(id) { return wiped() ? null : toWish((await sql`select * from wishes where id = ${id}`)[0]) || null },
@@ -71,9 +72,9 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
     async oldestWaiting() { const [r] = await sql`select min(at) as at from wishes where status = 'review'`; return wiped() || r.at == null ? null : Number(r.at) },
 
     // ---- wishes sent to someone who has no ornament yet ----
-    async sendWish({ tree, from, to, text, device, status, at }) { const token = rid(24); await sql`insert into sent_wishes (token, tree, from_name, to_name, body, device, status, at) values (${token}, ${tree}, ${from}, ${to}, ${text}, ${device}, ${status}, ${at})`; return { token } },
+    async sendWish({ tree, from, to, text, design = null, device, status, at }) { const token = rid(24); await sql`insert into sent_wishes (token, tree, from_name, to_name, body, design, device, status, at) values (${token}, ${tree}, ${from}, ${to}, ${text}, ${design}, ${device}, ${status}, ${at})`; return { token } },
     /** Never includes the words. */
-    async getSentWish(token) { if (wiped()) return null; const r = (await sql`select token, tree, from_name, to_name, device, status, claimed_by from sent_wishes where token = ${token}`)[0]; return r ? { token: r.token, tree: r.tree, from: r.from_name, to: r.to_name, device: r.device, status: r.status, claimedBy: r.claimed_by } : null },
+    async getSentWish(token) { if (wiped()) return null; const r = (await sql`select token, tree, from_name, to_name, design, device, status, claimed_by from sent_wishes where token = ${token}`)[0]; return r ? { token: r.token, tree: r.tree, from: r.from_name, to: r.to_name, design: r.design, device: r.device, status: r.status, claimedBy: r.claimed_by } : null },
     async claimSentWish(token, cardId, at) { if (wiped()) return 'no_wish'; return (await sql`select claim_sent_wish(${token}, ${cardId}, ${rid(12)}, ${at}) as out`)[0].out },
 
     // ---- opens and the gift record ----

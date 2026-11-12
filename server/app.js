@@ -9,7 +9,8 @@ import { givingComplete } from './repo-memory.js'
 
 const BOT = /bot\b|bot\/|crawl|spider|facebookexternalhit|whatsapp|slack|telegram|discord|linkedin|skypeuripreview|preview/i
 const EVENTS = new Set(['share_v1', 'share_v2', 'saved_calendar', 'saved_selfsend'])
-const LIMITS = { card: [864e5, 3], wish: [36e5, 10], tree: [864e5, 2], log: [6e4, 20] } // per device: 3 cards a day on a tree, 10 wishes an hour, 2 new trees a day
+// per device: 3 cards a day on a tree, 10 wishes an hour (40 on a tree for your own people, where everyone wishes everyone), 2 new trees a day
+const LIMITS = { card: [864e5, 3], wish: [36e5, 10], wishOwn: [36e5, 40], tree: [864e5, 2], log: [6e4, 20] }
 const REPORTS_TO_TAKE_DOWN = 3
 const TREE_NAME_MAX = 40
 const ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -72,7 +73,8 @@ async function route(req, repo, env, ctx) {
   // ---- trees ----
   if (GET && a === 'tree') {
     const tree = await treeBySlug(repo, b1 || 'global'), since = Number(query.since) || 0
-    return { tree: treeView(tree), counts: await repo.counts(tree.slug), ...(await repo.latestOrnaments(tree.slug, since, 120)) }
+    // `wished`: the ornaments on this tree this device has already left a wish for, so the page can say so after a reload
+    return { tree: treeView(tree), counts: await repo.counts(tree.slug), ...(await repo.latestOrnaments(tree.slug, since, 120)), wished: await repo.wishedOn(tree.slug, device) }
   }
   if (GET && a === 'keepsake') { const tree = await treeBySlug(repo, b1 || 'global'); return { tree: treeView(tree), counts: await repo.counts(tree.slug), names: (await repo.keepsakeNames(tree.slug)).slice(0, 20000) } }
 
@@ -104,7 +106,7 @@ async function route(req, repo, env, ctx) {
     if (!from || badName(from)) throw fail(400, 'bad_name')
     if (!String(body.text || '').trim() || String(body.text).trim().length > WISH_MAX) throw fail(400, 'bad_wish')
     if (await repo.hasWished(c.id, device)) throw fail(409, 'already')
-    await limit(repo, device, 'wish', null, t)
+    await limit(repo, device, (await repo.getTree(c.tree)).kind === 'global' ? 'wish' : 'wishOwn', null, t)
     await storeWish(repo, c, { from, text: body.text, kind: 'friend', device }, t)
     return { sealed: true } // never echoes the words, and never says whether it was flagged
   }
@@ -150,15 +152,17 @@ async function route(req, repo, env, ctx) {
     const tree = await treeBySlug(repo, body.tree || 'global'), from = firstName(body.from), to = firstName(body.to), text = String(body.text || '').trim()
     if (!from || badName(from) || !to || badName(to)) throw fail(400, 'bad_name')
     if (!text || text.length > WISH_MAX) throw fail(400, 'bad_wish')
+    // the ornament they chose for their friend, if they chose one
+    const design = body.design == null ? null : Number(body.design); if (design !== null && (!Number.isInteger(design) || design < 0 || design > 7)) throw fail(400, 'bad_card')
     await limit(repo, device, 'wish', null, t)
-    return repo.sendWish({ tree: tree.slug, from, to, text, device, status: flagWish(text) ? 'review' : 'ok', at: t }) // { token }: never the words, never whether it was flagged
+    return repo.sendWish({ tree: tree.slug, from, to, text, design, device, status: flagWish(text) ? 'review' : 'ok', at: t }) // { token }: never the words, never whether it was flagged
   }
   if (a === 'sent' && b1) {
     const w = await repo.getSentWish(b1); if (!w || w.status === 'rejected') throw fail(404, 'no_wish')
     const mine = w.device === device
     if (GET && !b2) {
       const me = query.me ? await repo.getCardByToken(String(query.me)) : null
-      return { from: w.from, to: w.to, tree: treeView(await repo.getTree(w.tree)), claimed: !!w.claimedBy, mine, canClaimHere: !!me && !me.hidden && me.tree === w.tree && me.device !== w.device && !w.claimedBy, closed: t >= FROZEN_UTC }
+      return { from: w.from, to: w.to, design: w.design ?? null, tree: treeView(await repo.getTree(w.tree)), claimed: !!w.claimedBy, mine, canClaimHere: !!me && !me.hidden && me.tree === w.tree && me.device !== w.device && !w.claimedBy, closed: t >= FROZEN_UTC }
     }
     if (POST && b2 === 'claim') {
       if (t >= FROZEN_UTC) throw fail(410, 'frozen')

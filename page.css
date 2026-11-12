@@ -290,3 +290,22 @@ a.brand{pointer-events:auto;text-decoration:none}
   .hc{font-size:58px}.nm{font-size:48px}.hc.small{font-size:42px}.nm.small{font-size:34px}
   .toast{left:20px;top:64px}
 }
+
+/* ---- 005: share buttons, the people on a tree, the wish form in a sheet ---- */
+.sharerow{display:flex;flex-direction:column;gap:10px}
+.sr-ways{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.sr{display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 4px 9px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(242,196,109,.3);color:#f4f0e7;text-decoration:none;font-size:12.5px;font-weight:600}
+.sr svg{width:22px;height:22px;color:#ffe3ad}.sr:hover,.sr:focus-visible{border-color:var(--gold);background:rgba(242,196,109,.12)}
+.sharerow .fine{min-height:1.2em;margin:0;text-align:center}
+.people{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto}
+.people li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(242,196,109,.2)}
+.people li span{font-family:var(--f-script);font-size:28px;line-height:1;color:#ffe3ad;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.people li .btn{flex:none;padding:8px 14px;font-size:14px}.people li em{font-style:normal;font-size:13.5px;color:#9fd9b4;padding:8px 6px}
+.sm-in .wishform,.sm-in .sealed{position:static;padding:0;background:none}
+.wf-name{display:flex;align-items:center;gap:10px}.wf-name label{font-size:13.5px;color:#d6dbec;flex:none}.wf-name .field{flex:1;width:auto;min-width:0;font-size:17px}
+.fcard .btn{flex:none;padding:9px 14px;font-size:14px;width:auto}.fcard .done{font-size:13.5px;color:#9fd9b4;flex:none}
+.designs{display:grid;grid-template-columns:1fr 1fr;gap:8px;border:0;margin:0;padding:0}.designs legend{font-size:13px;color:var(--muted);padding:0;margin-bottom:6px}
+.designs label{display:block;margin:0;cursor:pointer}.designs input{position:absolute;opacity:0}
+.designs span{display:block;padding:10px 12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:14.5px;color:var(--ink)}
+.designs input:checked+span{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}.designs input:focus-visible+span{outline:2px solid var(--gold);outline-offset:2px}
+.sm-in h3{padding:0 36px}

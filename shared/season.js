@@ -11,6 +11,9 @@ export const WIPE_AT = Date.UTC(YEAR + 1, 1, 1)
 const pad = n => String(n).padStart(2, '0')
 export const localDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
+/** Whole days from the visitor's own calendar day to 25 December. 0 on and after the day. */
+export const daysToChristmas = d => Math.max(0, Math.round((Date.UTC(YEAR, 11, 25) - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5))
+
 /** A wish opens when the server has passed the earliest time zone and the reader's own clock says it is the 25th. */
 export const isReleased = (utcMs, day) => utcMs >= RELEASE_UTC && day >= SEALED_DAY
 

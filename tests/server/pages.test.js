@@ -30,7 +30,7 @@ test('pages: card, thank-you and sent-wish pages describe themselves, are not li
   await call('POST', 'wish', { body: { to: A.id, from: 'Tom', text: 'SECRETWORDS for you' }, dev: 'B' })
   const sent = (await call('POST', 'sent', { body: { tree: 'global', from: 'Eleni', to: 'Tom', text: 'HIDDENWISH for Tom' }, dev: 'S' })).json
   const c = (await call('GET', `page/c/${A.id}`)).text, th = (await call('GET', `page/c/${A.id}`, { query: { t: '1' } })).text, w = (await call('GET', `page/w/${sent.token}`)).text
-  assert.match(c, /<title>Maria hung an ornament on the Giving Tree<\/title>/); assert.match(th, /Thank you from Maria&#39;s branch/); assert.match(w, /<title>A wish for Tom, from Eleni<\/title>/)
+  assert.match(c, /<title>Maria hung an ornament on the Giving Tree<\/title>/); assert.match(th, /<h1>Thank you from Maria<\/h1>/); assert.match(w, /<title>An ornament for Tom, from Eleni<\/title>/)
   for (const html of [c, th, w]) { assert.match(html, /noindex/); assert.equal(html.includes(A.token), false); assert.equal(/SECRETWORDS|HIDDENWISH/.test(html), false); assert.equal(MONEY_WORDS.test(body(html)), false); assert.match(html, /og:image:width" content="1200"/); assert.match(html, /twitter:image" content="https?:\/\//) }
   assert.match(c, /og:image" content="[^"]+\/og\.jpg"/); assert.match(w, /og:image" content="[^"]+\/og-wish\.jpg"/)
   // once the card's own picture exists, its pages use it, and the address changes if the picture does
