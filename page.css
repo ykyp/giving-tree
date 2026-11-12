@@ -4,8 +4,11 @@
 *{box-sizing:border-box}[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:var(--page);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px}
-.wrap{max-width:1040px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,400px);gap:56px;align-items:center}
-.notes{min-width:0;max-width:460px}
+/* The scene is a stage that fills the window on every device. In local development the test panel sits beside it. */
+.wrap{display:grid;grid-template-columns:340px minmax(0,1fr);height:100dvh}
+.wrap.solo{display:block}
+.notes{min-width:0;overflow:auto;padding:22px 20px;border-right:1px solid var(--line)}
+.notes h1{font-size:40px}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--pink);font-weight:600}
 h1{font-family:var(--f-display);font-weight:400;font-size:clamp(40px,5vw,58px);line-height:1;margin:10px 0 14px;text-wrap:balance}
 .lede{color:var(--muted);margin:0 0 22px;max-width:60ch}
@@ -27,7 +30,8 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 .proto h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 10px;font-weight:600}
 .proto ol,.proto ul{margin:0;padding-left:20px;color:var(--muted);font-size:14px;display:grid;gap:6px}.proto a{color:var(--ink)}
 
-.phone{position:relative;width:100%;max-width:420px;height:min(820px,calc(100dvh - 48px));min-height:620px;border-radius:46px;border:10px solid #1a2045;background:var(--night);overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px #2a3160;isolation:isolate;justify-self:center}
+.phone{position:relative;width:100%;height:100dvh;background:var(--night);overflow:hidden;isolation:isolate;container-type:inline-size;container-name:stage}
+body:has(.phone){padding:0;overflow:hidden}
 .phone .gl{position:absolute!important;inset:0;touch-action:none}
 .tap{position:absolute;inset:0;background:none;border:0;cursor:pointer;z-index:2}
 .topbar{position:absolute;top:0;left:0;right:0;z-index:9;display:flex;justify-content:center;align-items:center;padding:16px 16px 0;pointer-events:none}
@@ -134,7 +138,7 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 .toast{position:absolute;left:14px;top:60px;transform:translate(0,-12px);z-index:20;background:rgba(244,240,231,.96);color:var(--night);font-size:13.5px;font-weight:500;padding:9px 14px;border-radius:12px;width:max-content;max-width:calc(100% - 140px);opacity:0;transition:.3s;pointer-events:none;display:flex;gap:8px;align-items:center}
 .toast .tt{width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#c9a227 50%,#6b5310);flex:none}.toast.on{opacity:1;transform:translate(0,0)}
 .nogl{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:30px}.nogl-t{font-family:var(--f-display);font-size:28px;margin:0 0 8px}
-@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr);gap:28px}.notes{order:2;max-width:560px;width:100%;justify-self:center}.phone{order:1;height:min(780px,calc(100dvh - 40px))}}
+@media (max-width:860px){.wrap{display:flex;flex-direction:column;height:auto}.wrap.solo{display:block}.notes{order:2;border-right:0;max-width:560px;margin:0 auto}body:has(.notes){overflow:auto}}
 @media (prefers-reduced-motion:reduce){.hc,.live,.pill.pulse,.drag-hint{animation:none}}
 
 /* Walking the village */
@@ -174,8 +178,8 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 /* The two visits */
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .demo-note{margin:0;font-size:13px;color:var(--gold)}
-.wrap.solo{grid-template-columns:minmax(0,420px);justify-content:center}
-@media (max-width:480px){body:has(.wrap.solo){padding:0}.wrap.solo{display:block}.wrap.solo .phone{max-width:none;height:100dvh;border:0;border-radius:0}}
+
+
 .hc.small{font-size:36px}.nm.small{font-size:30px}
 .finale .greet:empty{padding:0}
 .wishform{position:absolute;left:0;right:0;bottom:0;z-index:6;padding:48px 18px 22px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(to bottom,transparent,rgba(8,11,30,.92) 22%)}
@@ -266,3 +270,23 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 .home .pk{align-self:center}
 @media (prefers-reduced-motion:reduce){.way{transition:none}}
 a.brand{pointer-events:auto;text-decoration:none}
+
+
+/* A stage wider than a phone (tablets, laptops, desktops): the scene still fills it, and everything you read or press
+   stays about a phone's width, centred. Phones never match this, so they are exactly as before. */
+@container stage (min-width:481px){
+  /* bands across the bottom keep their full-width fade; their contents sit in the centre column */
+  .chooser,.engrave,.wishform,.sealed,.foot{padding-inline:max(18px,calc(50% - 230px))}
+  /* cards and sheets become a centred column */
+  .fcard,.poicard{left:max(14px,calc(50% - 230px));right:max(14px,calc(50% - 230px))}
+  .sheet,.keepsake{left:max(0px,calc(50% - 240px));right:max(0px,calc(50% - 240px))}
+  /* dialogs are centred cards instead of sheets from the bottom */
+  .sheetmodal{align-items:center;justify-content:center;padding:24px}
+  .sm-in{width:min(480px,100%);max-height:100%;border-radius:26px;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+  .wishmodal>*{max-width:440px}
+  /* the tree's own controls come in from the edges to sit near the tree */
+  .turn.l{left:max(12px,calc(50% - 330px))}.turn.r,.zoom{right:max(12px,calc(50% - 330px))}
+  .greet{padding-top:max(60px,7vh)}
+  .hc{font-size:58px}.nm{font-size:48px}.hc.small{font-size:42px}.nm.small{font-size:34px}
+  .toast{left:20px;top:64px}
+}

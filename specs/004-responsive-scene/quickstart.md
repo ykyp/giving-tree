@@ -34,3 +34,19 @@ At each size, go through visit 1 (light the tree, choose, name, hang, seal, star
 | Rotate a tablet-sized window between upright and sideways mid-visit | Scene and panels adjust; the step is not lost |
 
 Phone regression: at 375×812 compare the greeting, the wish form and the tree sheet with the same screens on `main`. Positions and sizes match.
+
+## Results
+
+### 2026-11-12, local dev server and the public build, Apple M1 Pro
+
+| Size (stage) | Result |
+|---|---|
+| 1440×900 | Pass. Scene 1440×900, no page scroll. Chooser, name entry, wish form and greeting buttons 460 wide and centred. Turn and zoom buttons 330 from the centre. A mouse drag hung the ornament on the hook aimed at. Greeting and star shots show the whole tree. Invitation is a centred 480-wide card. Walk mode: map top right, mode button bottom left |
+| 768×1024 | Pass. Scene fills the stage; invitation card 480 wide and centred; the open dialog survived the resize |
+| 1024×768 | Pass. Scene fills the stage; greeting buttons 460 wide; the footer takes 35% of the height |
+| 375×812 | Pass. Footer padding 18, buttons 339 wide, greeting 46px, invitation a full-width sheet from the bottom: the same values as before the change |
+| Public build at 1440×900 and 375×812 | Pass. Stage is exactly the window, no test panel, no page padding or scroll |
+
+Drawing resolution at 1440×900 on a 2x screen: 2158×1349 (capped from 2880×1800).
+
+Not yet run: 1920×1080, a real tablet (rotation was simulated by resizing), real phones, and visit 2 at the wide sizes (it uses the same panels).
