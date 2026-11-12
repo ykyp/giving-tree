@@ -129,9 +129,9 @@ export default function Tree({ tier, brand }) {
     const m4 = new THREE.Matrix4(); for (let i = 0; i < N; i++) { m4.makeTranslation(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); bulbs.setMatrixAt(i, m4); bulbs.setColorAt(i, new THREE.Color(.08, .07, .06)) }
     bulbs.frustumCulled = false
     const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
-      uniforms: { uTime: { value: 0 }, uLight: { value: 0 }, uMap: { value: glow }, uScale: { value: 800 } },
-      vertexShader: `attribute float aT; uniform float uTime,uLight,uScale; varying float vA; varying vec3 vC;
-        void main(){ float on=clamp((uLight-aT)*25.,0.,1.); vA=on*(.75+.25*sin(uTime*2.+aT*90.)); vC=color;
+      uniforms: { uTime: { value: 0 }, uLight: { value: 0 }, uMap: { value: glow }, uScale: { value: 800 }, uPulse: { value: 1 } },
+      vertexShader: `attribute float aT; uniform float uTime,uLight,uScale,uPulse; varying float vA; varying vec3 vC;
+        void main(){ float on=clamp((uLight-aT)*25.,0.,1.); vA=on*(.75+.25*sin(uTime*2.+aT*90.))*uPulse; vC=color;
           vec4 mv=modelViewMatrix*vec4(position,1.); gl_PointSize=min(uScale*.13/-mv.z, uScale*.03); gl_Position=projectionMatrix*mv; }`,
       fragmentShader: `uniform sampler2D uMap; varying float vA; varying vec3 vC; void main(){ gl_FragColor=vec4(vC*texture2D(uMap,gl_PointCoord).a*vA*.85,1.); }` })
     const pts = new THREE.Points(g, mat); pts.frustumCulled = false
@@ -154,12 +154,13 @@ export default function Tree({ tier, brand }) {
     const t = now(), L = litLevel(), st = useStore.getState()
     needleMat.userData.uTime.value = t; needleMat.emissiveIntensity = L * 0.05
     lights.mat.uniforms.uTime.value = t; lights.mat.uniforms.uLight.value = L * 1.04; lights.mat.uniforms.uScale.value = size.height * gl.getPixelRatio()
+    const pulse = st.clock.pulse ? 1.25 + Math.sin(t * 4.5) * .95 : 1; lights.mat.uniforms.uPulse.value = pulse
     const n = Math.floor(L * N); if (n !== lights.lastN) { lights.lastN = n; const c = new THREE.Color()
       for (let i = 0; i < N; i++) { if (i < n) c.setRGB(lights.C[i * 3] * 1.6, lights.C[i * 3 + 1] * 1.3, lights.C[i * 3 + 2] * .9); else c.setRGB(.08, .07, .06); lights.bulbs.setColorAt(i, c) }
       lights.bulbs.instanceColor.needsUpdate = true }
-    if (halo.current) { halo.current.material.opacity = L * 0.22; const c = camera.position, l = Math.hypot(c.x, c.z) || 1; halo.current.position.set(-c.x / l * 6, 6.6, -c.z / l * 6) }
+    if (halo.current) { halo.current.material.opacity = L * 0.22 * pulse; const c = camera.position, l = Math.hypot(c.x, c.z) || 1; halo.current.position.set(-c.x / l * 6, 6.6, -c.z / l * 6) }
     // star: floats above the tree in 'crown', drops onto the top in 'crowning', sits there afterwards
-    const ph = st.phase, show = ['crown', 'crowning', 'greeting', 'explore'].includes(ph)
+    const ph = st.phase, show = ['crown', 'crowning', 'greeting', 'explore', 'mearrive', 'branch', 'parcels', 'gave', 'thanks', 'selfwish'].includes(ph)
     if (topper.current) { topper.current.visible = show
       let y = TOP_Y, glowA = .6
       if (ph === 'crown') { y = TOP_Y + 2.2 + Math.sin(t * 2) * 0.12; glowA = .8 + Math.sin(t * 4) * .2 }

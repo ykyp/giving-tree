@@ -15,6 +15,9 @@ export function whoosh() { if (!enabled || !ac) return; const n = ac.sampleRate 
   const s = ac.createBufferSource(), f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 600; s.buffer = b; s.connect(f).connect(ac.destination); s.start() }
 function startBed() { clearInterval(bed); const sc = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; let i = 2
   bed = setInterval(() => { if (!enabled || !ac || document.hidden) return; i = Math.max(0, Math.min(sc.length - 1, i + [-1, 1, 1, -2, 2, 0][Math.floor(Math.random() * 6)])); bell(sc[i], ac.currentTime, .022, 2.2); if (Math.random() < .3) bell(sc[i] / 2, ac.currentTime + .01, .016, 2.4) }, 560) }
+/** Church bells on Christmas morning: a descending peal, rung twice. */
+export function bells() { if (!enabled || !ac) return; const peal = [659.25, 587.33, 523.25, 493.88, 440, 392], t = ac.currentTime
+  for (let r = 0; r < 2; r++) peal.forEach((f, i) => { bell(f, t + r * 2.6 + i * .4, .11, 3.2); bell(f / 2, t + r * 2.6 + i * .4, .05, 3.6) }) }
 /** A soft footstep in snow: a short burst of filtered noise. */
 let lastCrunch = 0
 export function crunch() { if (!enabled || !ac) return; const t = ac.currentTime; if (t - lastCrunch < .18) return; lastCrunch = t

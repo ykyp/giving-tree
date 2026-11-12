@@ -6,6 +6,8 @@ import { BRANDS } from './config'
 import Tree from './three/Tree'
 import Crowd from './three/Crowd'
 import Hero from './three/Hero'
+import Branch from './three/Branch'
+import Season from './three/Season'
 import CameraRig from './three/CameraRig'
 import Director from './three/Director'
 import Effects from './three/Effects'
@@ -61,12 +63,13 @@ export default function App() {
   const tier = tierPref === 'auto' ? autoTier : tierPref
   const brand = BRANDS[brandKey]
   useEffect(() => { document.documentElement.style.setProperty('--accent', brand.accent) }, [brand])
-  // Routing + data: real API on the live site, sample data everywhere else.
-  useEffect(() => { boot() }, [])
+  useEffect(() => { useStore.getState().boot() }, [])
+  // real card and Christmas links are the phone alone; the notes and controls are for the demo
+  const live = useStore(s => s.apiInfo && !s.apiInfo.devClock), solo = /^\/(c|me)\//.test(location.pathname) && live
   const dpr = tier === 'high' ? [1, 2] : tier === 'mid' ? [1, 1.5] : [1, 1]
   return (
-    <div className="wrap">
-      <Panel tier={tier} />
+    <div className={'wrap' + (solo ? ' solo' : '')}>
+      {!solo && <Panel tier={tier} />}
       <div className="phone" id="phone">
         {hasWebGL2 ? (
           <Canvas className="gl" dpr={dpr} flat gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
@@ -79,6 +82,8 @@ export default function App() {
               <Tree tier={tier} brand={brand} />
               <Crowd brand={brand} />
               <Hero brand={brand} />
+              <Branch brand={brand} />
+              <Season brand={brand} />
               <Snow tier={tier} />
               <CameraRig /><Director /><WalkGate />
               <Effects tier={tier} />

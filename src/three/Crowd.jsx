@@ -24,6 +24,18 @@ export const crowd = { list: [], nextId: 1 }
 const usedCells = () => new Set(crowd.list.map(o => o.cell))
 export const usedHooks = () => { const s = new Set(crowd.list.map(o => o.hook)); const h = useStore.getState().heroHook; if (h >= 0) s.add(h); return s }
 export function freeHooks() { const u = usedHooks(); return shared.hooks.map((_, i) => i).filter(i => !u.has(i)) }
+/** The hooks round an ornament, nearest first. These stay free for the people it invites. */
+const RESERVE = 6, NEAR = new Map()
+export function branchHooks(hook, n = RESERVE) {
+  if (!NEAR.has(hook)) { const p = shared.hooks[hook].p; NEAR.set(hook, shared.hooks.map((h, i) => [h.p.distanceToSquared(p), i]).filter(x => x[1] !== hook).sort((a, b) => a[0] - b[0]).map(x => x[1])) }
+  return NEAR.get(hook).slice(0, n)
+}
+/** Where the ornament in your hand may go: anywhere free, or on the branch you were invited to. */
+export function hangHooks() {
+  const s = useStore.getState()
+  if (s.view !== 'send' || !s.parent || !shared.hooks[s.parent.hook]) return freeHooks()
+  const u = usedHooks(); return branchHooks(s.parent.hook, Math.max(RESERVE, s.parent.branch.kids.length + 3)).filter(i => !u.has(i))
+}
 
 function makeOrn(name, design, color, cell, hook, r, mins) {
   return { id: crowd.nextId++, name, design, color, cell, hook, mins, ph: r() * 6.28, dir: r() < .5 ? -1 : 1, L: 0.16 + r() * 0.08, bob: null, prev: null, dropAt: 0, fs: undefined }
@@ -31,30 +43,34 @@ function makeOrn(name, design, color, cell, hook, r, mins) {
 export function populate(brand) {
   if (api.online && api.ornaments) return populateReal(brand, api.ornaments)
   crowd.list = []; const r = seeded(hashStr(brand.slug) % 100000 + 3), hooks = shared.hooks.map((_, i) => i).sort(() => r() - .5)
-  const n = Math.min(MAXO - 6, Math.floor(shared.hooks.length * 0.66))
+  const full = useStore.getState().clock.phase !== 'advent' // Christmas: the square is full of the season's ornaments
+  const n = Math.min(MAXO - 8, Math.floor(shared.hooks.length * (full ? 0.97 : 0.66)))
   for (let k = 0; k < n; k++) {
     const o = makeOrn(NAMES[k < 5 ? k : Math.floor(r() * NAMES.length)], Math.floor(r() * 8), brand.palette[Math.floor(r() * brand.palette.length)], 8 + k, hooks[k], r, k < 5 ? [2, 5, 9, 14, 21][k] : Math.floor(30 + r() * 4000))
     crowd.list.push(o); drawCell(o.cell, o.design, o.color, o.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
   }
   crowd.dirty = true
 }
-/** Real ornaments from the database: each keeps the hook its sender chose when that hook is free. */
-function populateReal(brand, rows) {
-  crowd.list = []; const used = new Set(), r = seeded(7), mins = d => Math.max(0, Math.round((Date.now() - Date.parse(d)) / 6e4))
-  const free = () => { const f = shared.hooks.map((_, i) => i).filter(i => !used.has(i)); return f.length ? f[Math.floor(r() * f.length)] : -1 }
-  rows.slice(0, MAXO - 6).forEach((row, k) => {
-    let hook = Number.isInteger(row.hook) && row.hook >= 0 && row.hook < shared.hooks.length && !used.has(row.hook) ? row.hook : free(); if (hook < 0) return; used.add(hook)
-    const o = makeOrn(row.sender_name, row.design, brand.palette[hashStr(row.id) % brand.palette.length], 8 + k, hook, r, mins(row.created_at)); o.cardId = row.id
-    crowd.list.push(o); drawCell(o.cell, o.design, o.color, o.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
-  })
-  crowd.dirty = true
+/** Puts a real branch on the tree: clears its hooks of sample ornaments and hangs the people on it. */
+export function applyBranch(brand, bv) {
+  crowd.list = crowd.list.filter(o => !o.real); crowd.dirty = true; shared.reserved = new Set()
+  if (!bv || !shared.hooks[bv.hook]) return
+  const res = [bv.hook, ...branchHooks(bv.hook, Math.max(RESERVE, bv.kids.length + 3))], rs = new Set(res)
+  crowd.list = crowd.list.filter(o => !rs.has(o.hook)); shared.reserved = rs
+  const taken = new Set([bv.hook, useStore.getState().heroHook]), place = (o, hook) => {
+    const cells = usedCells(); let cell; for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
+    if (cell === undefined) return
+    const r = seeded(hashStr(o.name + o.id) % 100000 + 1), orn = makeOrn(o.name, o.design, brand.palette[Math.floor(r() * brand.palette.length)], cell, hook, r, 0); orn.real = true
+    crowd.list.push(orn); drawCell(cell, orn.design, orn.color, orn.name, { per: brand.per, brandAccent: brand.accent, brandMono: brand.mono })
+  }
+  if (bv.owner) place(bv.owner, bv.hook)
+  for (const k of bv.kids) { const hook = rs.has(k.hook) && !taken.has(k.hook) ? k.hook : res.find(h => !taken.has(h)); if (hook === undefined) break; taken.add(hook); place(k, hook) }
 }
-/** A gift arriving live: the ornament drops from above onto a free hook and swings. `real` = an ornament row from the database. */
-export function addLive(brand, real) {
-  if (real && crowd.list.some(o => o.cardId === real.id)) return null
-  let free = freeHooks(), hook, cell
+/** A gift arriving live: the ornament drops from above onto a free hook and swings. */
+export function addLive(brand) {
+  let free = freeHooks().filter(h => !shared.reserved.has(h)), hook, cell
   const cells = usedCells(); for (let c = 8; c < 128; c++) if (!cells.has(c)) { cell = c; break }
-  if (!free.length || cell === undefined || crowd.list.length >= MAXO) { const old = crowd.list.reduce((a, o) => o.mins > a.mins ? o : a, crowd.list[0]); crowd.list = crowd.list.filter(o => o !== old); hook = old.hook; cell = old.cell }
+  if (!free.length || cell === undefined || crowd.list.length >= MAXO) { const old = crowd.list.filter(o => !o.real).reduce((a, o) => o.mins > a.mins ? o : a, crowd.list.find(o => !o.real)); crowd.list = crowd.list.filter(o => o !== old); hook = old.hook; cell = old.cell }
   else hook = free[Math.floor(Math.random() * free.length)]
   crowd.list.forEach(o => o.mins += 1)
   const name = real ? real.sender_name : NAMES[Math.floor(Math.random() * NAMES.length)], r = Math.random
@@ -94,8 +110,9 @@ export default function Crowd({ brand }) {
   const caps = useMemo(() => { const m = new THREE.InstancedMesh(capGeo, capMat, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
   const threads = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXO * 6), 3)); const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcaa65a, transparent: true, opacity: .8 })); l.frustumCulled = false; return l }, [])
 
-  const online = useStore(s => s.online), treeRev = useStore(s => s.treeRev)
-  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color); populate(brand) }, [brand, meshes, online, treeRev])
+  const christmas = useStore(s => s.clock.phase !== 'advent'), branchView = useStore(s => s.branchView)
+  useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color); populate(brand); applyBranch(brand, useStore.getState().branchView) }, [brand, meshes, christmas])
+  useEffect(() => { applyBranch(brand, branchView) }, [branchView])
 
   function rebuild() {
     meshes.forEach(m => m.userData.list = [])
