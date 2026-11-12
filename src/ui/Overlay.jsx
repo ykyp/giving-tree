@@ -192,3 +192,10 @@ function Coach() {
   if (!show) return null
   return <div className="coach" aria-hidden="true"><span className="coach-ring" /><span className="coach-hand"><Hand /></span><span className="coach-t">Tap the snow to walk there</span></div>
 }
+
+/** A calendar event on 25 December, 09:00 local, with the Christmas link. No data leaves the phone. */
+function addToCalendar(url) {
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MosaicAds//Giving Tree//EN', 'BEGIN:VEVENT', `UID:${Date.now()}@giving-tree`, 'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z',
+    'DTSTART:20261225T090000', 'DTEND:20261225T091500', 'SUMMARY:Open your Christmas wishes 🎁', `DESCRIPTION:Your wishes are ready: ${url}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n')
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'christmas-wishes.ics'; document.body.appendChild(a); a.click(); a.remove()
+}

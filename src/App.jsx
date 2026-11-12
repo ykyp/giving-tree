@@ -15,6 +15,9 @@ import Walk from './three/Walk'
 import { Environment, Sky, Ground, Village, Snow, Lights } from './three/World'
 import Overlay from './ui/Overlay'
 import Panel from './ui/Panel'
+import { api, connect, getCard, getMe, subscribeGifts, getOrnament, mergeBrand } from './lib/api'
+import { addLive } from './three/Crowd'
+import { chime } from './lib/audio'
 
 function detectTier() {
   try { if (window.__tier) return window.__tier
@@ -23,6 +26,34 @@ function detectTier() {
     return cores >= 6 && mem >= 4 ? 'mid' : 'low' } catch (e) { return 'mid' }
 }
 const hasWebGL2 = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch (e) { return false } })()
+
+/** Decide what to show from the URL: /  ·  /c/{card}  ·  /t/{brand}  ·  /me/{christmas link}. */
+async function boot() {
+  const st = useStore.getState, path = location.pathname, q = new URLSearchParams(location.search)
+  const m = path.match(/^\/(c|t|me)\/([\w-]+)/), kind = m?.[1], arg = m?.[2]
+  let brand = q.get('brand') || (kind === 't' ? arg : 'mosaicads'), card = null, me = null
+  if (kind === 'c') { try { card = await getCard(arg); brand = card.brand } catch (e) {} }
+  if (kind === 'me') { try { me = await getMe(arg); brand = me.card.brand } catch (e) {} }
+  if (!BRANDS[brand]) BRANDS[brand] = { ...BRANDS.mosaicads, slug: brand, extra: [], mono: brand[0].toUpperCase(), star: 'logo' }
+  const tree = await connect(brand)
+  if (!tree) { st().restart('send'); return } // demo mode
+  document.body.classList.add('app')
+  mergeBrand(BRANDS[brand], tree.brand)
+  useStore.setState({ online: true, brandKey: brand, live: true, treeRev: st().treeRev + 1 })
+  subscribeGifts(brand, async g => {
+    const b = BRANDS[brand]; b.opened = Math.max(b.opened + 1, b.opened); const row = g.card_id && await getOrnament(g.card_id)
+    if (row && addLive(b, row)) chime([1568], 0, .04)
+    st().toastMsg(`${g.display_name}'s card just gave ${g.amount_pence < 100 ? g.amount_pence + 'p' : '£' + (g.amount_pence / 100).toFixed(2)}`); st().bump()
+  })
+  if (card) { useStore.setState({ from: card.sender_name, cardId: card.id, design: card.design }); st().restart('open'); useStore.setState({ design: card.design }); return }
+  if (kind === 'c') { st().toastMsg('That card link is not valid, so here is the tree.'); st().restart('tree'); return }
+  if (me) {
+    st().restart('tree'); const waiting = me.wishes.filter(w => !w.open).length, open = me.wishes.filter(w => w.open).length
+    st().toastMsg(open ? `${open} wish${open > 1 ? 'es' : ''} waiting for you` : waiting ? `${waiting} wish${waiting > 1 ? 'es' : ''} waiting · they open on 25 December` : `Your ornament is on the tree, ${me.card.sender_name}`)
+    return
+  }
+  st().restart(kind === 't' ? 'tree' : 'send')
+}
 
 function WalkGate() { const on = useStore(s => s.phase === 'explore' && s.exploreMode === 'walk'); return on ? <Walk /> : null }
 

@@ -98,3 +98,12 @@ If the store is missing, the site shows "The tree can't be reached just now" and
 2. `npm run assets` → `public/models/*.glb` (+ `.lod1.glb`), with a size report against the budget.
 3. Serve the Draco and Basis decoders from our own domain: copy `node_modules/three/examples/jsm/libs/draco/` and `.../basis/` to `public/decoders/`, then `useGLTF.setDecoderPath('/decoders/draco/')`.
 4. Tree: keep hook positions from `BRANCHES` (or export empties named `hook_###` from Blender and read them instead).
+
+## Database (Supabase)
+1. Vercel → giving-tree project → **Storage** → Create → **Supabase**, region **London (eu-west-2)**. This adds `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` to the project.
+2. Supabase → **SQL Editor** → paste and run `supabase/migrations/0001_giving_tree.sql`, then `0003_ornaments_after_first_gift.sql`.
+3. Supabase → Database → Extensions → enable **pg_cron**, then run `0002_purge_schedule.sql` (deletes wishes and emails on 1 Feb).
+4. Vercel → Settings → Environment Variables: add `DEVICE_SALT` (a long random string) and `PUBLIC_BASE_URL`. Redeploy.
+5. Go live: once the charity agreement is signed, run `update brands set agreement_signed_at = now(), status = 'live' where slug = 'mosaicads';`
+
+API (Vercel functions in `api/`): `POST /api/cards` · `POST /api/open` · `GET /api/tree?brand=` · `POST /api/wishes` · `GET /api/me?token=` · `POST /api/reminder`. All counting rules live in the database function `record_open` (tested: own device, once per phone, bots, cap, tree must be live).
