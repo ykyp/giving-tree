@@ -70,3 +70,19 @@ curl -s -X POST https://<preview-host>/api/demo/card -H 'content-type: applicati
 ```
 
 Expected: `"testMode":false`, then `{"error":"not_found"}`. The page has no test panel, and "Pretend it's" does not appear in the downloaded scripts.
+
+## Results
+
+### 2026-11-12, local dev server, phone-sized browser
+
+| Section | Result |
+|---|---|
+| 1. Rules | Pass: 58 of 58 in memory and on Postgres 14 (`npm run test:db`) |
+| 2. Home | Pass. Three choices shown; the 3D scene was not downloaded; the words are in the HTML; "Your branches" listed "Eleni's branch on The Georgiou family" after hanging |
+| 3. Start a tree | Pass. "The official tree" refused; "The Georgiou family" created at `/t/georgiou-family-…`; the ornament hung there did not appear on the shared tree; the greeting shows the tree's link |
+| 4. Send a wish | Pass. Link and message returned; the wish page showed names and a parcel with no words in the page; hanging an ornament from it put one sealed parcel from Eleni under it |
+| Build | Home entry 52 KB compressed; scene in its own chunk; no test panel or demo data in the public build |
+
+Not yet run: the "report this tree" and "copy link" buttons by hand, the 25 December read of a claimed wish in the browser (covered by tests), section 5 and 6 on a deployed copy.
+
+Differences from the plan: `/t/{slug}` goes straight into the tree (the words in the page are what shows while it loads) instead of a separate words-first tree page; `/about` is not built yet, so the sitemap lists the home page and the shared tree only; `public/og.jpg` (the preview picture) does not exist yet.

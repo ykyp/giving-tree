@@ -123,7 +123,7 @@ test('private links: the calendar file carries the link; public pages never carr
   assert.match(ics, /DTSTART:20261225T090000\r\n/); assert.ok(ics.replace(/\r\n /g, '').includes(A.token))
   assert.equal(JSON.stringify((await call('GET', `card/${A.id}`, { dev: 'B' })).json).includes(A.token), false)
   assert.equal(JSON.stringify((await call('GET', 'tree/global')).json).includes(A.token), false)
-  const prev = (await call('GET', `preview/${A.id}`)).text; assert.match(prev, /Maria hung/); assert.equal(prev.includes(A.token), false)
+  const prev = (await call('GET', `page/c/${A.id}`)).text; assert.match(prev, /Maria hung/); assert.equal(prev.includes(A.token), false)
 })
 
 test('freeze: after 1 January 12:00 UTC no cards and no gifts; the keepsake keeps names and counts', async () => {

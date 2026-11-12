@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState, lazy } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { PerformanceMonitor } from '@react-three/drei'
 import { useStore } from './store'
@@ -14,7 +14,9 @@ import Effects from './three/Effects'
 import Walk from './three/Walk'
 import { Environment, Sky, Ground, Village, Snow, Lights } from './three/World'
 import Overlay from './ui/Overlay'
-import Panel from './ui/Panel'
+import { DEMO } from './lib/api'
+// Test tools: only when run on a developer's machine, or in the single-file demo. Never in the site's own build.
+const Panel = import.meta.env.DEV || DEMO ? lazy(() => import('./ui/Panel')) : null
 
 function detectTier() {
   try { if (window.__tier) return window.__tier
@@ -35,11 +37,11 @@ export default function App() {
   useEffect(() => { document.documentElement.style.setProperty('--accent', brand.accent) }, [brand])
   useEffect(() => { useStore.getState().boot() }, [])
   // real card and Christmas links are the phone alone; the notes and controls are for the demo
-  const testMode = useStore(s => !!s.apiInfo?.testMode), solo = !testMode // the public site is the card and nothing else
+  const testMode = useStore(s => !!s.apiInfo?.testMode), solo = !testMode || !Panel // the public site is the card and nothing else
   const dpr = tier === 'high' ? [1, 2] : tier === 'mid' ? [1, 1.5] : [1, 1]
   return (
     <div className={'wrap' + (solo ? ' solo' : '')}>
-      {!solo && <Panel tier={tier} />}
+      {!solo && Panel && <Suspense fallback={null}><Panel tier={tier} /></Suspense>}
       <div className="phone" id="phone">
         {hasWebGL2 ? (
           <Canvas className="gl" dpr={dpr} flat gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }}

@@ -10,54 +10,33 @@
       "destination": "/api/index?p=$1"
     },
     {
-      "source": "/c/:id",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(bot|Bot|facebookexternalhit|WhatsApp|Slack|Telegram|Discord|LinkedIn|SkypeUriPreview|Preview).*"
-        }
-      ],
-      "destination": "/api/index?p=preview/:id"
-    },
-    {
       "source": "/t/:slug",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(bot|Bot|facebookexternalhit|WhatsApp|Slack|Telegram|Discord|LinkedIn|SkypeUriPreview|Preview).*"
-        }
-      ],
-      "destination": "/api/index?p=preview/tree/:slug"
-    },
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(bot|Bot|facebookexternalhit|WhatsApp|Slack|Telegram|Discord|LinkedIn|SkypeUriPreview|Preview).*"
-        }
-      ],
-      "destination": "/api/index?p=preview/tree/global"
+      "destination": "/api/index?p=page/t/:slug"
     },
     {
       "source": "/c/:id",
-      "destination": "/index.html"
+      "destination": "/api/index?p=page/c/:id"
+    },
+    {
+      "source": "/w/:token",
+      "destination": "/api/index?p=page/w/:token"
     },
     {
       "source": "/me/:token",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
-      "source": "/t/:slug",
-      "destination": "/index.html"
+      "source": "/sitemap.xml",
+      "destination": "/api/index?p=sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/index?p=robots"
     }
   ],
   "headers": [
     {
-      "source": "/me/(.*)",
+      "source": "/(me|w)/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",

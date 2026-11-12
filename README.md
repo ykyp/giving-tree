@@ -1,6 +1,6 @@
 # The Giving Tree
 
-The MosaicAds Christmas card, built with React Three Fiber. People visit twice:
+A Christmas tree for wishes, built with React Three Fiber. The home page offers three ways in: hang on the tree everyone shares, start a tree for your own people (at its own link, `/t/your-name-xxxxx`), or send a wish to a friend. People visit twice:
 
 - **1 to 24 December**: fly into a snowy square, light the tree, hang an ornament with your name on it, seal a wish and invite people to your branch. Everyone you invite hangs theirs next to yours and leaves you a sealed wish.
 - **25 to 31 December**: come back to open your wishes one by one, see what your branch gave and send a thank-you card.
@@ -9,6 +9,7 @@ It is about wishes between people: no charity, sponsor or money is involved. (A 
 
 Specs:
 
+- `specs/003-home-and-own-trees/`: the home page, trees people create, sent wishes, pages for search engines, and why this is not on Next.js yet
 - `specs/002-production-launch/`: making it a public product (wishes first, real data, trees, operators), with its task list
 - `specs/001-two-visit-december/`: the two-visit feature (spec, plan, data model, API contracts, tasks and test results), written with [Spec Kit](https://github.com/github/spec-kit)
 - `giving-tree-v3-spec.md`: the scene and the original card flow
@@ -20,7 +21,7 @@ npm install
 npm run dev        # http://localhost:5173, with the real server rules and a file store in .data/
 npm test           # the server rules: time lock, counting, moderation, deletion
 npm run build      # dist/app.js (single bundle)
-node scripts/page.mjs   # publish/ = one page + app.js, a no-server demo for the hosted preview
+npm run build:demo # publish/ = one page + app.js with the rules inside: a no-server demo
 npm run assets     # compress Blender exports in assets/raw/ → public/models/
 ```
 

@@ -240,3 +240,29 @@ select.field{width:210px}.small-field{width:150px!important;padding:6px 10px}
 @media (prefers-reduced-motion:reduce){.ptag,.pk.open .pk-rv,.pk.open .pk-rl,.pk.open .pk-bow,.paper,.w-actions{animation:none}.pk.open .pk-lid{animation:none;transform:translate(26px,-34px) rotate(32deg)}.pk.open .pk-rv,.pk.open .pk-rl,.pk.open .pk-bow{opacity:0}}
 .unreach{position:absolute;inset:0;z-index:30;background:#070b1c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:30px;text-align:center}
 .mark{width:22px;height:22px;flex:none}.mark.big{width:54px;height:54px}
+
+/* Pages outside the 3D scene: the home page, a sent wish, and the words every address shows before the scene loads. */
+.pre{max-width:520px;margin:0 auto;min-height:calc(100dvh - 64px);display:flex;flex-direction:column;justify-content:center;gap:14px;padding:24px 4px}
+.pre h1{font-size:clamp(40px,11vw,60px);margin:0}
+.pre h2{font-family:var(--f-display);font-weight:400;font-size:28px;line-height:1.1;margin:0}
+.pre .lede{font-size:17px;color:#d6dbec;margin:0;max-width:none}
+.pre .fine{text-align:left}.pre a{color:var(--gold)}
+.ways,.mine{display:flex;flex-direction:column;gap:10px;margin:6px 0}
+.mine h2{font-family:var(--f-ui);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.way{display:flex;flex-direction:column;gap:3px;padding:15px 18px;border-radius:18px;background:var(--panel);border:1px solid var(--line);text-decoration:none;color:var(--ink)!important;transition:border-color .15s,transform .15s}
+.way b{font-family:var(--f-display);font-weight:400;font-size:24px;line-height:1.1}.way span{font-size:14px;color:var(--muted)}
+.way:hover,.way:focus-visible{border-color:var(--gold);transform:translateY(-1px)}
+.ways .way:first-child{background:linear-gradient(#ffd68f,#f2b25c);border-color:transparent;color:#3b2406!important}.ways .way:first-child span{color:#5a3a12}
+.mine-way{border-color:rgba(242,196,109,.45)}
+.card-form{display:flex;flex-direction:column;gap:10px}
+.card-form label{font-size:13px;color:var(--muted);margin-top:4px}
+.card-form .field{width:100%;font-size:17px;padding:12px 14px}
+.card-form textarea.field{font-family:Caveat,cursive;font-size:24px;line-height:1.2;resize:none;color:#ffe3ad}
+.card-form .sub{text-align:left}.card-form .err{text-align:left;min-height:0}
+.card-form .btn.text{align-self:flex-start;text-decoration:none}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.two>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.linkbox{margin:0;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:14px;overflow-wrap:anywhere;user-select:all}
+.sent{align-items:center;text-align:center}.sent .lede,.sent .fine{text-align:center}.sent h1{font-size:clamp(30px,8vw,42px)}
+.home .pk{align-self:center}
+@media (prefers-reduced-motion:reduce){.way{transition:none}}
+a.brand{pointer-events:auto;text-decoration:none}
