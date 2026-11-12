@@ -116,8 +116,11 @@ async function route(req, repo, env, ctx) {
     if (b1 === 't') { const tree = await repo.getTree(String(b2 || '')); if (!tree || !tree.published) return html(pages.missing('tree')); return html(pages.tree({ tree: treeView(tree), counts: await repo.counts(tree.slug) }), 'public, s-maxage=60') }
     if (b1 === 'c') {
       const c = await repo.getCard(String(b2 || '')); if (!c || c.hidden) return html(pages.missing('card'))
-      const tree = treeView(await repo.getTree(c.tree)); if (query.t == null) return html(pages.card({ card: c, tree, late: t >= RELEASE_UTC }))
-      const br = await repo.getBranch(c.id); return html(pages.thanks({ card: c, tree, given: tree.giving ? br.gifts * tree.giving.perGift : 0 }))
+      // the card's own picture (their ornament, close up) once their page has made one; the site's picture until then.
+      // The address changes when the picture does, because chat apps keep pictures by address.
+      const kind = query.t == null ? 'invite' : 'thanks', pic = await repo.getPreview(c.id, kind), image = pic ? `/api/img/${c.id}/${kind}?v=${pic.length.toString(36)}${pic.slice(-6).replace(/[^\w]/g, '')}` : undefined
+      const tree = treeView(await repo.getTree(c.tree)); if (kind === 'invite') return html(pages.card({ card: c, tree, late: t >= RELEASE_UTC, image }))
+      const br = await repo.getBranch(c.id); return html(pages.thanks({ card: c, tree, given: tree.giving ? br.gifts * tree.giving.perGift : 0, image }))
     }
     if (b1 === 'w') { const w = await repo.getSentWish(String(b2 || '')); if (!w || w.status === 'rejected') return html(pages.missing('wish')); return html(pages.sent({ sent: w, tree: treeView(await repo.getTree(w.tree)) })) }
     return html(pages.missing('page'))
@@ -165,7 +168,7 @@ async function route(req, repo, env, ctx) {
     }
   }
 
-  if (GET && a === 'img') { const v = await repo.getPreview(b1, b2 === 'thanks' ? 'thanks' : 'invite'); if (!v) throw fail(404, 'no_image'); return { type: 'image/jpeg', b64: v, headers: { 'cache-control': 'public, max-age=3600' } } }
+  if (GET && a === 'img') { const v = await repo.getPreview(b1, b2 === 'thanks' ? 'thanks' : 'invite'); if (!v) throw fail(404, 'no_image'); return { type: 'image/jpeg', b64: v, headers: { 'cache-control': 'public, max-age=86400, immutable' } } }
 
   // ---- your own branch, by private link ----
   if (a === 'me') {
