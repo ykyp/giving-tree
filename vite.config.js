@@ -25,7 +25,9 @@ function devApi() {
 }
 // The home page's words are in the HTML itself, from the same module the server uses for every other address.
 function homeHtml() {
-  const home = pages.home(), origin = (process.env.PUBLIC_ORIGIN || '').replace(/\/$/, '')
+  const home = pages.home(),
+    // chat apps need full addresses for the preview picture; on Vercel the production address is known at build time
+    origin = (process.env.PUBLIC_ORIGIN || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : '')).replace(/\/$/, '')
   return { name: 'giving-tree-home-html', transformIndexHtml: html => html.replace('<!--head-->', headTags({ ...home, origin })).replace('<!--body-->', home.body) }
 }
 

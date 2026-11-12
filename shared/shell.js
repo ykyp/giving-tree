@@ -15,8 +15,8 @@ export function headTags({ title, description, path = '/', origin = '', noindex 
     `<meta property="og:site_name" content="${SITE}">`, `<meta property="og:type" content="website">`, `<meta property="og:title" content="${esc(title)}">`, `<meta property="og:description" content="${esc(description)}">`,
     `<meta property="og:url" content="${esc(origin + path)}">`,
     // the picture chat apps show: 1200×630, the size they all accept
-    `<meta property="og:image" content="${img}">`, '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">', `<meta property="og:image:alt" content="${esc(imageAlt || title)}">`,
-    '<meta name="twitter:card" content="summary_large_image">', `<meta name="twitter:image" content="${img}">`,
+    `<meta property="og:image" content="${img}">`, '<meta property="og:image:type" content="image/jpeg">', '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">', `<meta property="og:image:alt" content="${esc(imageAlt || title)}">`,
+    '<meta name="twitter:card" content="summary_large_image">', `<meta name="twitter:title" content="${esc(title)}">`, `<meta name="twitter:description" content="${esc(description)}">`, `<meta name="twitter:image" content="${img}">`,
     '<link rel="icon" href="/icon.svg" type="image/svg+xml">'].join('\n')
 }
 /** A whole document, for addresses the server answers. The built script and stylesheet have fixed names. */
