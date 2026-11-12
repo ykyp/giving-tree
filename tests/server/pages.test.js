@@ -31,7 +31,16 @@ test('pages: card, thank-you and sent-wish pages describe themselves, are not li
   const sent = (await call('POST', 'sent', { body: { tree: 'global', from: 'Eleni', to: 'Tom', text: 'HIDDENWISH for Tom' }, dev: 'S' })).json
   const c = (await call('GET', `page/c/${A.id}`)).text, th = (await call('GET', `page/c/${A.id}`, { query: { t: '1' } })).text, w = (await call('GET', `page/w/${sent.token}`)).text
   assert.match(c, /<title>Maria hung an ornament on the Giving Tree<\/title>/); assert.match(th, /Thank you from Maria&#39;s branch/); assert.match(w, /<title>A wish for Tom, from Eleni<\/title>/)
-  for (const html of [c, th, w]) { assert.match(html, /noindex/); assert.equal(html.includes(A.token), false); assert.equal(/SECRETWORDS|HIDDENWISH/.test(html), false); assert.equal(MONEY_WORDS.test(body(html)), false); assert.match(html, /og:image" content="[^"]+\/og\.jpg"/) }
+  for (const html of [c, th, w]) { assert.match(html, /noindex/); assert.equal(html.includes(A.token), false); assert.equal(/SECRETWORDS|HIDDENWISH/.test(html), false); assert.equal(MONEY_WORDS.test(body(html)), false); assert.match(html, /og:image:width" content="1200"/); assert.match(html, /twitter:image" content="https?:\/\//) }
+  assert.match(c, /og:image" content="[^"]+\/og\.jpg"/); assert.match(w, /og:image" content="[^"]+\/og-wish\.jpg"/)
+  // once the card's own picture exists, its pages use it, and the address changes if the picture does
+  const jpeg = 'data:image/jpeg;base64,' + 'A'.repeat(400)
+  await call('POST', `me/${A.token}/preview`, { body: { kind: 'invite', jpeg }, dev: 'A' })
+  const own = (await call('GET', `page/c/${A.id}`)).text.match(/og:image" content="([^"]+)"/)[1]
+  assert.match(own, new RegExp(`/api/img/${A.id}/invite\\?v=\\w+$`)); assert.match((await call('GET', `page/c/${A.id}`, { query: { t: '1' } })).text, /og:image" content="[^"]+\/og\.jpg"/)
+  await call('POST', `me/${A.token}/preview`, { body: { kind: 'invite', jpeg: jpeg + 'BBBBBBBB' }, dev: 'A' })
+  assert.notEqual((await call('GET', `page/c/${A.id}`)).text.match(/og:image" content="([^"]+)"/)[1], own)
+  const img = await call('GET', `img/${A.id}/invite`); assert.equal(img.type, 'image/jpeg'); assert.equal((await call('GET', `img/${A.id}/thanks`)).status, 404)
   assert.equal(w.includes(sent.token), false)
   assert.equal((await call('GET', 'page/c/nope')).status, 404); assert.equal((await call('GET', 'page/w/nope')).status, 404)
 })

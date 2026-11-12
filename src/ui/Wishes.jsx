@@ -5,7 +5,7 @@ import { copy, money } from '../../shared/copy.js'
 const words = { ...copy, money }
 import { chime, ensure } from '../lib/audio'
 import { api, get, post, track, addToCalendar } from '../lib/api'
-import { shared } from '../three/shared'
+import { uploadCardPreview, PREVIEW_W, PREVIEW_H } from '../lib/preview'
 import { WISH_MAX, BRANCH_MAX } from '../../shared/moderation.js'
 import { YEAR } from '../../shared/season.js'
 
@@ -14,6 +14,10 @@ const formError = e => FORM_ERRORS[e.code] || "That didn't send. Check your conn
 const HANDS = ['Caveat', 'Kalam', '"Shadows Into Light"']
 const handFor = name => HANDS[hashStr(name.toLowerCase()) % HANDS.length]
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
+/** The two lines on a card's picture. */
+const previewWords = (s, thanks) => thanks
+  ? { title: s.branchName || `${s.myName}'s branch`, line: (() => { const n = (s.me?.branch.kids || []).map(k => k.name); return n.length ? `Thank you, ${n.slice(0, 4).join(', ')}${n.length > 4 ? ' and everyone' : ''}` : 'Thank you' })() }
+  : { title: s.myName, line: s.clock.phase === 'advent' ? 'hung an ornament. Hang yours next to it.' : 'hung an ornament. Leave a wish.' }
 const Share = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></svg>
 
 /** A wrapped parcel in the page. `open` unties the ribbon and lifts the lid. */
@@ -87,6 +91,7 @@ export function BranchCounter({ count }) {
 
 /** End of visit 1: the invitation, then keeping your own link. */
 export function Greeting({ brand }) {
+  useEffect(() => { const t = setTimeout(() => { const st = useStore.getState(); st.createCard().then(c => uploadCardPreview(c.token, 'invite', previewWords(useStore.getState(), false))).catch(() => {}) }, 1200); return () => clearTimeout(t) }, [])
   const s = useStore(), [share, setShare] = useState(false), [save, setSave] = useState(false), asked = useRef(false), walkAfter = useRef(false)
   const withCard = async fn => { try { await s.createCard(); fn() } catch (e) { s.toastMsg("We couldn't save your ornament. Check your connection.") } }
   const closeSave = () => { setSave(false); if (walkAfter.current) s.setPhase('explore') }
@@ -113,12 +118,8 @@ export function ShareSheet({ kind, brand, onClose }) {
   const link = s.cardLink(c.id, thanks), waiting = s.parcels.filter(p => p.kind === 'friend').length, names = s.me?.branch.kids.map(k => k.name) || []
   const giving = s.tree.giving, late = s.clock.phase !== 'advent', given = stats?.given || 0
   const text = thanks ? words.thanks({ giving, given, nye }) : words.invite({ late })
-  useEffect(() => { const snap = shared.snapshot?.(); const x = cv.current?.getContext('2d'); if (!x) return
-    x.fillStyle = '#0a1030'; x.fillRect(0, 0, 600, 314); if (snap) x.drawImage(snap, 0, 0, 600, 314)
-    const g = x.createLinearGradient(0, 150, 0, 314); g.addColorStop(0, 'rgba(5,8,25,0)'); g.addColorStop(1, 'rgba(5,8,25,.88)'); x.fillStyle = g; x.fillRect(0, 0, 600, 314)
-    x.fillStyle = '#ffe3ad'; x.font = '56px "Great Vibes", cursive'; x.fillText(thanks ? `${s.branchName || `${s.myName}'s branch`}` : s.myName, 26, 268)
-    x.fillStyle = '#e8ebf5'; x.font = '500 21px "Bricolage Grotesque", sans-serif'; x.fillText(thanks ? `${names.slice(0, 5).join(' · ')}${names.length > 5 ? ' …' : ''}` : late ? 'Leave me a wish' : `${plural(waiting, 'wish', 'wishes')} waiting`, 28, 298)
-    post(`me/${c.token}/preview`, { kind, jpeg: cv.current.toDataURL('image/jpeg', .72) }).catch(() => {}) }, [])
+  // the picture a chat app will show for this link: drawn here so they see it, and sent to the server
+  useEffect(() => { if (cv.current) uploadCardPreview(c.token, kind, previewWords(s, thanks), cv.current) }, [])
   const sent = () => track(thanks ? 'share_v2' : 'share_v1', s.tree.slug)
   const tryShare = async () => { sent(); try { if (navigator.share) { await navigator.share({ title: 'The Giving Tree', text, url: link }); return } } catch (e) { return } s.toastMsg("Your phone's share sheet opens here on the live site.") }
   const copy = () => { sent(); try { navigator.clipboard.writeText(`${text} ${link}`).then(() => s.toastMsg('Link copied'), () => s.toastMsg(link)) } catch (e) { s.toastMsg(link) } }
@@ -129,7 +130,7 @@ export function ShareSheet({ kind, brand, onClose }) {
         <h3>{thanks ? (nye ? 'Happy New Year from our branch' : 'Your thank-you card') : 'Your invitation is ready'}</h3>
         <p className="sub">{thanks ? 'One card for everyone on your branch, or send it to the family group.' : 'This is what it looks like when you send it.'}</p>
         <div className="chat"><div className="bubble">
-          <div className="prev"><canvas ref={cv} width={600} height={314} /><div className="pt"><b>{words.previewTitle({ name: s.myName, branchName: s.branchName, thanks })}</b><span>{words.previewText({ giving, thanks, waiting, given, late })} Best with the sound on.</span><em>{location.host}</em></div></div>
+          <div className="prev"><canvas ref={cv} width={PREVIEW_W} height={PREVIEW_H} /><div className="pt"><b>{words.previewTitle({ name: s.myName, branchName: s.branchName, thanks })}</b><span>{words.previewText({ giving, thanks, waiting, given, late })} Best with the sound on.</span><em>{location.host}</em></div></div>
           <div className="msg">{text} <span className="u">{link}</span></div><div className="time">✓✓</div>
         </div></div>
         <div className="btnrow"><button type="button" className="btn primary" onClick={tryShare}>Share</button><button type="button" className="btn ghost" onClick={copy}>Copy link</button></div>
@@ -240,6 +241,7 @@ export function Gave() {
 }
 
 export function Thanks({ brand }) {
+  useEffect(() => { const st = useStore.getState(); if (st.mine) uploadCardPreview(st.mine.token, 'thanks', previewWords(st, true)) }, [])
   const s = useStore(), [share, setShare] = useState(false), names = s.me.branch.kids.map(k => k.name), nye = s.clock.phase === 'nye'
   return (<>
     <div className="finale on">

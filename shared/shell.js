@@ -8,11 +8,15 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz
 const plural = (n, one, many = one + 's') => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`
 
 /** The tags that describe a page. `path` is its own address; `origin` the site's. */
-export function headTags({ title, description, path = '/', origin = '', noindex = false }) {
+export function headTags({ title, description, path = '/', origin = '', noindex = false, image = '/og.jpg', imageAlt }) {
+  const img = esc(origin + image)
   return [`<title>${esc(title)}</title>`, `<meta name="description" content="${esc(description)}">`,
     noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${esc(origin + path)}">`,
     `<meta property="og:site_name" content="${SITE}">`, `<meta property="og:type" content="website">`, `<meta property="og:title" content="${esc(title)}">`, `<meta property="og:description" content="${esc(description)}">`,
-    `<meta property="og:url" content="${esc(origin + path)}">`, `<meta property="og:image" content="${esc(origin)}/og.jpg">`, '<meta name="twitter:card" content="summary_large_image">',
+    `<meta property="og:url" content="${esc(origin + path)}">`,
+    // the picture chat apps show: 1200×630, the size they all accept
+    `<meta property="og:image" content="${img}">`, '<meta property="og:image:width" content="1200">', '<meta property="og:image:height" content="630">', `<meta property="og:image:alt" content="${esc(imageAlt || title)}">`,
+    '<meta name="twitter:card" content="summary_large_image">', `<meta name="twitter:image" content="${img}">`,
     '<link rel="icon" href="/icon.svg" type="image/svg+xml">'].join('\n')
 }
 /** A whole document, for addresses the server answers. The built script and stylesheet have fixed names. */
@@ -28,7 +32,7 @@ ${headTags({ ...p, origin })}
 const pre = inner => `<main class="pre">${inner}</main>`
 
 export const pages = {
-  home: () => ({ path: '/', title: `${SITE}: hang an ornament, send a wish`,
+  home: () => ({ path: '/', imageAlt: 'A Christmas tree hung with ornaments in a snowy village square at night', title: `${SITE}: hang an ornament, send a wish`,
     description: 'Hang an ornament with your name on it, invite the people you love, and open the wishes they leave you on Christmas morning.',
     body: pre(`<h1>${SITE}</h1>
 <p class="lede">Hang an ornament with your name on it and invite the people you love. Each of them can leave you a wish. Every wish stays wrapped under your ornament until Christmas morning, then opens for you alone.</p>
@@ -43,11 +47,11 @@ export const pages = {
 <p class="lede">${counts.ornaments > 0 ? `${plural(counts.ornaments, 'ornament')} hung so far, and ${plural(counts.wishes, 'wish', 'wishes')} waiting for Christmas morning.` : 'No ornaments yet. Be the first to hang one.'}</p>
 <p>Hang an ornament with your name on it and invite the people you love. They hang theirs next to yours and leave you a wish, which stays wrapped until Christmas morning.</p>
 <p class="fine">The tree is loading. <a href="/">About the Giving Tree</a></p>`) }),
-  card: ({ card, tree, late }) => ({ path: `/c/${card.id}`, noindex: true, title: copy.previewTitle({ name: card.name }), description: copy.previewText({ giving: tree.giving, thanks: false, waiting: 0, late }),
+  card: ({ card, tree, late, image }) => ({ path: `/c/${card.id}`, noindex: true, image, imageAlt: `${card.name}'s ornament on the tree`, title: copy.previewTitle({ name: card.name }), description: copy.previewText({ giving: tree.giving, thanks: false, waiting: 0, late }),
     body: pre(`<h1>${esc(card.name)} hung an ornament on ${esc(tree.name)}</h1><p class="lede">Hang yours next to ${esc(card.name)}'s and leave them a wish${late ? '' : ' for Christmas morning'}.</p><p class="fine">The tree is loading.</p>`) }),
-  thanks: ({ card, tree, given }) => ({ path: `/c/${card.id}?t=1`, noindex: true, title: copy.previewTitle({ name: card.name, branchName: card.branchName, thanks: true }), description: copy.previewText({ giving: tree.giving, thanks: true, given }),
+  thanks: ({ card, tree, given, image }) => ({ path: `/c/${card.id}?t=1`, noindex: true, image, imageAlt: `${card.name}'s ornament on the tree`, title: copy.previewTitle({ name: card.name, branchName: card.branchName, thanks: true }), description: copy.previewText({ giving: tree.giving, thanks: true, given }),
     body: pre(`<h1>Thank you from ${esc(card.branchName || `${card.name}'s branch`)}</h1><p class="lede">Open the wishes waiting for you.</p><p class="fine">The tree is loading.</p>`) }),
-  sent: ({ sent, tree }) => ({ path: '/w/', noindex: true, title: `A wish for ${sent.to}, from ${sent.from}`, description: `${sent.from} sent ${sent.to} a wish on ${tree.name}. Hang an ornament to keep it.`,
+  sent: ({ sent, tree }) => ({ path: '/w/', noindex: true, image: '/og-wish.jpg', imageAlt: 'A wrapped parcel under a Christmas tree', title: `A wish for ${sent.to}, from ${sent.from}`, description: `${sent.from} sent ${sent.to} a wish on ${tree.name}. Hang an ornament to keep it.`,
     body: pre(`<h1>A wish for ${esc(sent.to)}, from ${esc(sent.from)}</h1><p class="lede">It is wrapped until Christmas morning. Hang an ornament on ${esc(tree.name)} to keep it.</p><p class="fine">Loading.</p>`) }),
   missing: what => ({ path: '/', noindex: true, status: 404, title: SITE, description: `We couldn't find that ${what}.`,
     body: pre(`<h1>We couldn't find that ${what}</h1><p class="lede">It may have been removed, or the link may be incomplete.</p><p><a href="/t/global">Go to the Giving Tree</a></p>`) }),
