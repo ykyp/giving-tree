@@ -3,5 +3,15 @@
   "framework": "vite",
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index?p=$1" },
+    { "source": "/c/:id", "has": [{ "type": "header", "key": "user-agent", "value": ".*(bot|Bot|facebookexternalhit|WhatsApp|Slack|Telegram|Discord|LinkedIn|SkypeUriPreview|Preview).*" }], "destination": "/api/index?p=preview/:id" },
+    { "source": "/c/:id", "destination": "/index.html" },
+    { "source": "/me/:token", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/me/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }, { "key": "Referrer-Policy", "value": "no-referrer" }] }
+  ],
+  "crons": [{ "path": "/api/cron/email", "schedule": "0 9 25 12 *" }]
 }

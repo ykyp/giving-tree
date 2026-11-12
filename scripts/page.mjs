@@ -5,8 +5,9 @@ fs.mkdirSync('publish', { recursive: true })
 fs.copyFileSync('dist/app.js', 'publish/app.js')
 fs.writeFileSync('publish/index.html', `<title>The Giving Tree</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="gt-demo" content="1">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Instrument+Serif:ital@0;1&family=Great+Vibes&family=Caveat:wght@600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Instrument+Serif:ital@0;1&family=Great+Vibes&family=Caveat:wght@600&family=Kalam:wght@400&family=Shadows+Into+Light&display=swap">
 <style>
 ${css}
 </style>

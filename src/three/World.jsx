@@ -349,7 +349,8 @@ function Birds() {
 }
 
 export function Snow({ tier }) {
-  const count = tier === 'high' ? 5000 : tier === 'mid' ? 3000 : 1200
+  const fresh = useStore(s => s.clock.phase !== 'advent') // fresh snow from Christmas morning
+  const count = Math.round((tier === 'high' ? 5000 : tier === 'mid' ? 3000 : 1200) * (fresh ? 1.5 : 1))
   const { geo, mat } = useMemo(() => {
     const s = new Float32Array(count * 4); for (let i = 0; i < count; i++) s.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4)
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3)); g.setAttribute('aS', new THREE.BufferAttribute(s, 4))

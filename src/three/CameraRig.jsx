@@ -14,6 +14,8 @@ const FLY = new THREE.CatmullRomCurve3([V(6, 30, 132), V(2, 19, 110), V(-1, 8, 8
 const FLY_LOOK = new THREE.CatmullRomCurve3([V(0, 10, 84), V(0, 6, 64), V(0, 5, 40), V(0, 6.2, 0)], false, 'centripetal')
 export const FLY_DUR = 10.5
 
+/** Close on your ornament, with the parcels below it in the upper half of the frame. */
+function branchShot(s, dur) { const h = shared.hooks[s.heroHook] || shared.hooks[0]; return [h.p.clone().addScaledVector(h.n, 3.8).add(V(0, .1, 0)), h.p.clone().add(V(0, -1.25, 0)), dur] }
 function shotFor(phase, s, t) {
   const k = t - s.phaseAt
   switch (phase) {
@@ -22,7 +24,10 @@ function shotFor(phase, s, t) {
     case 'choose': return [V(0, 3.5, 13.9), V(0, .75, CRATE[2]), 2.6]
     case 'engrave': return [V(0, 1.95, 11.2), V(0, 1.28, HELD[2]), 1.8]
     case 'gift': return [V(-1.2, 2.5, 11.7), V(0, .6, CRATE[2]), 2.6]
-    case 'unwrap': return [V(.5, 2.2, 11.2), V(0, 1.5, 7.6), 2]
+    case 'unwrap': case 'meet': return [V(.5, 2.2, 11.2), V(0, 1.5, 7.6), 2]
+    case 'wishfor': return s.view === 'open' ? [V(.5, 2.2, 11.2), V(0, 1.5, 7.6), 2] : branchShot(s, 1.6)
+    case 'seal': case 'branch': case 'parcels': case 'gave': case 'thanks': case 'selfwish': return branchShot(s, 1.6)
+    case 'mearrive': return branchShot(s, 4.8)
     case 'hang': { const h = shared.hangS; return [V(Math.sin(h.az) * h.r, h.y, Math.cos(h.az) * h.r), V(0, Math.max(2.2, h.y - .8 - (21 - h.r) * .05), 0), 2] }
     case 'settling': { const h = shared.hooks[s.heroHook] || shared.hooks[0]; return [h.p.clone().addScaledVector(h.n, 3.1).add(V(0, .55, 0)), h.p.clone().add(V(0, -.35, 0)), 1.6] }
     case 'crown': return [V(0, 13, 19), V(0, 14.4, 0), 2.2]
@@ -72,13 +77,13 @@ export default function CameraRig() {
   // explore: orbit controls take over the camera
   useEffect(() => {
     if (phase !== 'explore' || mode !== 'orbit' || !controls.current) return
-    const c = controls.current, tree = view === 'tree'
+    const c = controls.current, tree = view === 'tree' || view === 'keepsake'
     c.setLookAt(camera.position.x, camera.position.y, camera.position.z, rig.look.x, rig.look.y, rig.look.z, false)
-    c.setLookAt(4, tree ? 6.5 : 5.5, 22, 0, tree ? 8.6 : 7.4, 0, true)
+    c.setLookAt(13, tree ? 6.5 : 5.5, 17.5, 0, tree ? 8.6 : 7.4, 0, true)
   }, [phase, view, mode])
   useEffect(() => {
     const c = controls.current; if (phase !== 'explore' || mode !== 'orbit' || !c) return
-    if (focus == null) { c.minDistance = 4; c.setLookAt(4, view === 'tree' ? 6.5 : 5.5, 22, 0, view === 'tree' ? 8.6 : 7.4, 0, true); return }
+    if (focus == null) { c.minDistance = 4; const wide = view === 'tree' || view === 'keepsake'; c.setLookAt(13, wide ? 6.5 : 5.5, 17.5, 0, wide ? 8.6 : 7.4, 0, true); return }
     let wp, hook
     if (focus === 'hero') { wp = shared.heroBody.clone(); hook = shared.hooks[useStore.getState().heroHook] }
     else { const o = crowd.list.find(x => x.id === focus); if (!o) return; wp = o.wp.clone(); hook = shared.hooks[o.hook] }

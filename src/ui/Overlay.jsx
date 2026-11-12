@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useStore } from '../store'
 import { BLOCK, DESIGN_META } from '../config'
-import { amt, money, ago, now } from '../lib/util'
-import { ensure, setSound, chime } from '../lib/audio'
+import { amt, money, ago } from '../lib/util'
+import { ensure, setSound, chime, bells } from '../lib/audio'
+import { Greeting, Meet, SealSelf, WishFor, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
 import { PoiLabels, Minimap, PoiCard } from './WalkHUD'
 import { walkToOrnament } from '../three/Walk'
 
-const startOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
+const startOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, cardP: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
 
 const Hand = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11V5a2 2 0 0 1 4 0v6" /><path d="M13 10.5V9a2 2 0 0 1 4 0v4a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15a2 2 0 0 1 3.3-2.2L9 15" /></svg>
 const Arrow = ({ d }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
@@ -17,25 +18,33 @@ const Arrow = ({ d }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 export default function Overlay({ brand }) {
   const s = useStore()
   const { phase, view, phaseAt } = s
-  const [intro, setIntro] = useState(true), [autoBtn, setAutoBtn] = useState(false), [share, setShare] = useState(null)
+  const [intro, setIntro] = useState(true), [autoBtn, setAutoBtn] = useState(false)
   useEffect(() => { if (phase === 'arrival') { setIntro(true); const t = setTimeout(() => setIntro(false), 1500); return () => clearTimeout(t) } setIntro(false) }, [phase, s.run])
   useEffect(() => { setAutoBtn(false); if (phase === 'hang') { const t = setTimeout(() => setAutoBtn(true), 8000); return () => clearTimeout(t) } }, [phase, s.run])
-  useEffect(() => { setShare(null) }, [s.run])
+  // browsers only allow sound after a tap, so the Christmas bells also ring on the first one
+  const rang = useRef(false)
+  useEffect(() => { const ring = () => { if (rang.current || useStore.getState().clock.phase === 'advent') return; rang.current = true; ensure(); bells() }; window.addEventListener('pointerdown', ring); return () => window.removeEventListener('pointerdown', ring) }, [])
 
-  const tapAction = { arrival: () => s.setPhase('dark'), dark: () => s.setPhase('lighting'), gift: () => { s.tryOpen(); s.setPhase('unwrap') }, crown: () => s.setPhase('crowning') }[phase]
-  const prompt = { dark: 'Tap to light the tree', gift: `Tap to open ${s.from}'s gift`, crown: 'Tap the star to put it on top' }[phase]
+  const tapAction = { arrival: () => s.setPhase('dark'), dark: () => s.setPhase('lighting'), gift: () => { s.tryOpen(); s.setPhase('unwrap') }, crown: () => s.setPhase('crowning'), mearrive: () => s.setPhase(s.afterArrive(s)) }[phase]
+  const prompt = { dark: 'Tap to light the tree', gift: s.thanksFrom ? `Tap to open ${s.from}'s thank-you` : `Tap to open ${s.from}'s gift`, crown: 'Tap the star to put it on top' }[phase]
   const onTap = () => { ensure(); tapAction?.() }
 
+  if (s.unreachable) return (
+    <div className="unreach" role="alert">
+      <p className="nogl-t">The tree can’t be reached just now</p>
+      <p className="sub">Please try again in a moment.</p>
+      <button type="button" className="btn primary" onClick={() => s.boot()}>Try again</button>
+    </div>)
   return (
     <>
       {tapAction && <button className="tap" type="button" aria-label={prompt || 'Skip'} onClick={onTap} />}
       {prompt && <div className="pill pulse" key={phase}><Hand />{prompt}</div>}
-      {phase === 'arrival' && !intro && <div className="skip">Tap to skip</div>}
+      {(phase === 'mearrive' || (phase === 'arrival' && !intro)) && <div className="skip">Tap to skip</div>}
 
       {phase === 'choose' && <Chooser />}
       {phase === 'engrave' && <Engrave />}
       {phase === 'hang' && <>
-        <div className="pill"><Hand />{view === 'send' ? 'Drag your ornament onto a glowing hook' : `Drag ${s.from}'s ornament onto the tree`}</div>
+        <div className="pill"><Hand />{s.parent ? `Drag your ornament onto ${s.from}'s branch` : 'Drag your ornament onto a glowing hook'}</div>
         <div className="turn-hint">Drag to go round · pinch or double-tap to zoom</div>
         <div className="zoom"><button type="button" aria-label="Zoom in" onClick={() => shared.zoomBy?.(.75)}>+</button><button type="button" aria-label="Zoom out" onClick={() => shared.zoomBy?.(1.33)}>−</button></div>
         <button type="button" className="turn l" aria-label="Turn left around the tree" onClick={() => { shared.hangAz += .7 }}><Arrow d="m15 18-6-6 6-6" /></button>
@@ -45,13 +54,20 @@ export default function Overlay({ brand }) {
       </>}
       {(phase === 'settling') && <Chip />}
 
-      {(phase === 'greeting') && <Greeting brand={brand} onShare={() => setShare(s.createCard())} />}
-      {share && <ShareSheet link={share} brand={brand} onClose={() => setShare(null)} />}
-      {phase === 'explore' && <Explore brand={brand} />}
+      {phase === 'meet' && <Meet brand={brand} />}
+      {phase === 'seal' && <SealSelf />}
+      {phase === 'wishfor' && <WishFor />}
+      {phase === 'greeting' && <Greeting brand={brand} />}
+      {phase === 'branch' && <Home brand={brand} />}
+      {phase === 'parcels' && <Parcels />}
+      {phase === 'gave' && <Gave brand={brand} />}
+      {phase === 'thanks' && <Thanks brand={brand} />}
+      {phase === 'selfwish' && <SelfCoda />}
+      {phase === 'explore' && (view === 'keepsake' ? <Keepsake brand={brand} /> : <Explore brand={brand} />)}
       <Labels />
       <Toast />
       <div className="topbar">
-        {phase === 'explore' && view !== 'tree' && <button type="button" className="back" aria-label="Back to the greeting" onClick={() => { useStore.setState({ focus: null }); s.setPhase('greeting') }}><Arrow d="m15 18-6-6 6-6" /></button>}
+        {phase === 'explore' && view !== 'tree' && view !== 'keepsake' && <button type="button" className="back" aria-label="Back" onClick={() => { useStore.setState({ focus: null }); s.setPhase(view === 'me' ? s.myHome() : 'greeting') }}><Arrow d="m15 18-6-6 6-6" /></button>}
         <span className="brand">{brand.mono ? <span className="mono">{brand.mono}</span> : <span className="logo"><i /><i /><i /><i /></span>}{brand.name}</span>
         <button type="button" className="snd" aria-label={s.sound ? 'Turn sound off' : 'Turn sound on'} aria-pressed={s.sound} onClick={() => { useStore.setState({ sound: !s.sound }); setSound(!s.sound) }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H3v6h3l5 4z" /><path d={s.sound ? 'M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14' : 'm22 9-6 6m0-6 6 6'} /></svg></button>
@@ -105,66 +121,14 @@ function Chip() {
   useEffect(() => { let raf; const loop = () => { raf = requestAnimationFrame(loop); const cam = shared.camera, el = ref.current; if (!cam || !el) return
     const p = shared.heroPos.clone().add(new THREE.Vector3(0, .45, 0)).project(cam), r = el.parentElement.getBoundingClientRect()
     el.style.left = Math.max(90, Math.min(r.width - 90, (p.x * .5 + .5) * r.width)) + 'px'; el.style.top = Math.max(140, (-p.y * .5 + .5) * r.height) + 'px' }; loop(); return () => cancelAnimationFrame(raf) }, [])
-  const name = s.view === 'send' ? s.myName : s.from
-  return <div className="ochip" ref={ref}><b>{name}</b><span>{s.view === 'send' ? 'your ornament is on the tree' : `${s.from}'s card · ${amt(s.brand().per)} to ${s.brand().charity.name}`}</span></div>
-}
-
-function Greeting({ brand, onShare }) {
-  const s = useStore(), r = s.openResult
-  const restartOwn = startOwn
-  if (s.view === 'send') return (
-    <div className="finale on">
-      <div className="greet"><div className="hc">Happy Christmas</div><div className="nm">from {s.myName}</div></div>
-      <div className="foot">
-        <p className="note">{brand.name} gives {amt(brand.per)} to {brand.charity.name} each time someone opens your card, up to {money(brand.cap)} in total.</p>
-        <button type="button" className="btn primary" onClick={onShare}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></svg>Send to someone</button>
-        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Walk around the village</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
-      </div>
-    </div>)
-  const msg = !r ? '' : r.counted ? null : r.reason === 'own' ? `This is your own card, so opening it here doesn't give. It gives when someone else opens it.`
-    : r.reason === 'cap' ? `${brand.name}'s pot is complete. Thank you: all ${money(brand.cap)} has gone to ${brand.charity.name}.` : `This card has already given from this phone. Make your own and start the next gift.`
-  return (
-    <div className="finale on">
-      <div className="greet"><div className="hc">Happy Christmas</div><div className="nm">from {s.from}</div></div>
-      <div className="foot">
-        {r?.counted ? <div className="gift"><span className="tile" /><p>Opening {s.from}'s card just gave <b>{amt(brand.per)}</b> to {brand.charity.name}, from {brand.name}. Their ornament is on the tree.</p></div>
-          : <div className="gift muted"><span className="tile" /><p>{msg}</p></div>}
-        <button type="button" className="btn primary" onClick={restartOwn}>Make your own ornament</button>
-        <div className="btnrow"><button type="button" className="btn ghost" onClick={() => s.setPhase('explore')}>Walk around the village</button><button type="button" className="btn ghost" onClick={() => s.restart()}>Watch again</button></div>
-      </div>
-    </div>)
-}
-
-function ShareSheet({ link, brand, onClose }) {
-  const s = useStore(), cv = useRef()
-  useEffect(() => { const c = shared.snapshot?.(); const x = cv.current?.getContext('2d'); if (!x) return
-    x.fillStyle = '#0a1030'; x.fillRect(0, 0, 600, 314); if (c) x.drawImage(c, 0, 0, 600, 314)
-    const g = x.createLinearGradient(0, 170, 0, 314); g.addColorStop(0, 'rgba(5,8,25,0)'); g.addColorStop(1, 'rgba(5,8,25,.85)'); x.fillStyle = g; x.fillRect(0, 0, 600, 314)
-    x.fillStyle = '#ffe3ad'; x.font = '60px "Great Vibes", cursive'; x.fillText(`from ${s.myName}`, 28, 282) }, [])
-  const tryShare = async () => { try { if (navigator.share) { await navigator.share({ title: 'A Christmas card', text: `${s.myName} hung an ornament for you 🎄`, url: link }); return } } catch (e) {}
-    s.toastMsg("Your phone's share sheet opens here on the live site.") }
-  const copy = () => { try { navigator.clipboard.writeText(link).then(() => s.toastMsg('Link copied'), () => s.toastMsg(link)) } catch (e) { s.toastMsg(link) } }
-  return (
-    <div className="sheetmodal" role="dialog" aria-label="Send your card">
-      <div className="sm-in">
-        <button type="button" className="x" aria-label="Close" onClick={onClose}>×</button>
-        <h3>Your card is ready</h3>
-        <p className="sub">This is what it looks like when you send it.</p>
-        <div className="chat"><div className="bubble">
-          <div className="prev"><canvas ref={cv} width={600} height={314} /><div className="pt"><b>{s.myName} sent you a Christmas card</b><span>Open it and {brand.name} gives {amt(brand.per)} to {brand.charity.name}. Best with the sound on.</span><em>christmas.mosaicads.ai</em></div></div>
-          <div className="msg">{s.myName} hung an ornament for you 🎄 <span className="u">{link}</span></div><div className="time">✓✓</div>
-        </div></div>
-        <div className="btnrow"><button type="button" className="btn primary" onClick={tryShare}>Share</button><button type="button" className="btn ghost" onClick={copy}>Copy link</button></div>
-        <button type="button" className="btn text" onClick={() => { useStore.setState({ from: s.myName, view: 'open' }); useStore.getState().restart('open') }}>See what they'll see →</button>
-      </div>
-    </div>
-  )
+  const name = s.myName
+  return <div className="ochip" ref={ref}><b>{name}</b><span>your ornament is on the tree</span></div>
 }
 
 function Explore({ brand }) {
   const s = useStore(), [hint, setHint] = useState(true), [open, setOpen] = useState(false), walking = s.exploreMode === 'walk'
   useEffect(() => { setHint(true); const t = setTimeout(() => setHint(false), 6000); return () => clearTimeout(t) }, [s.exploreMode])
-  const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'send' ? s.myName : s.from, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
+  const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'open' ? s.from : s.myName, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
   const given = brand.opened * brand.per, pct = Math.min(100, given / brand.cap * 100)
   const rows = [...brand.extra.map(r => ({ n: r.n, when: 'just now', you: true })), ...crowd.list.slice().sort((a, b) => a.mins - b.mins).slice(0, 8).map(o => ({ n: o.name, when: ago(o.mins) }))].slice(0, 8)
   return (<>
@@ -174,7 +138,7 @@ function Explore({ brand }) {
     <button type="button" className="mode" onClick={() => useStore.setState({ exploreMode: walking ? 'orbit' : 'walk', poi: null, focus: null })}>{walking ? 'Tree view' : 'Walk around'}</button>
     {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
     {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
-    {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'send' ? 'your ornament' : 'just now') : ago(fo.mins)} · gave {amt(brand.per)} to {brand.charity.name}</span></div>
+    {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'open' ? 'just now' : 'your ornament') : ago(fo.mins)} · gave {amt(brand.per)} to {brand.charity.name}</span></div>
       <button type="button" className="x" aria-label="Close" onClick={() => useStore.setState({ focus: null })}>×</button></div>}
     {s.view === 'tree' && !fo && <div className={'sheet' + (open ? '' : ' peek')}>
       <button type="button" className="grab" aria-expanded={open} onClick={() => setOpen(!open)}><span className="t1">{brand.title}</span><span className="t2">{money(given)} given · {brand.opened.toLocaleString('en-GB')} cards · {open ? 'tap to close' : 'tap for details'}</span></button>
@@ -199,7 +163,7 @@ function Labels() {
       const show = []
       if (s.phase === 'explore') {
         const list = shared.crowdWorld.map(o => ({ name: o.name, wp: o.wp, hook: o.hook, you: false, id: o.id }))
-        if (s.heroHook >= 0 && shared.heroVisible) list.push({ name: s.view === 'send' ? s.myName : s.from, wp: shared.heroBody, hook: s.heroHook, you: true, id: 'hero' })
+        if (s.heroHook >= 0 && shared.heroVisible) list.push({ name: s.view === 'open' ? s.from : s.myName, wp: shared.heroBody, hook: s.heroHook, you: true, id: 'hero' })
         const r = el.getBoundingClientRect()
         for (const o of list) { if (!o.wp || o.id === s.focus) continue; const d = o.wp.distanceTo(cam.position); if (d > 7) continue
           const h = shared.hooks[o.hook]; toC.copy(cam.position).sub(o.wp).normalize(); if (h.n.x * toC.x + h.n.z * toC.z < .05) continue

@@ -6,7 +6,7 @@ import { CRATE, HELD, TREE } from '../config'
 import { now, clamp, ease, easeOut, easeBack, seeded } from '../lib/util'
 import { shared, glow } from './shared'
 import { DESIGNS, paintSurface, TAG_DESIGNS, tagGeo, capGeo, loopGeo, capMat, drawCell, cellUV, crowdMats, tagMatAtlas, designColor, mosaicGeo } from './ornamentKit'
-import { ropeStep, hangMatrices, freeHooks } from './Crowd'
+import { ropeStep, hangMatrices, hangHooks } from './Crowd'
 import { Rsil } from './Tree'
 import { chime } from '../lib/audio'
 
@@ -70,7 +70,7 @@ function GiftBox({ brand, from, visible }) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t }, [from])
   useFrame(() => {
     const st = useStore.getState(); if (!lid.current) return
-    const k = ['unwrap', 'hang'].includes(st.phase) ? now() - st.phaseAt + (st.phase === 'hang' ? 9 : 0) : 0
+    const k = ['unwrap', 'meet'].includes(st.phase) ? now() - st.phaseAt + (st.phase === 'meet' ? 9 : 0) : 0
     const rk = easeOut(k / .5); ribbons.current.scale.set(1, 1, 1 - rk * .98); ribbons.current.visible = rk < .97
     const lk = easeOut((k - .35) / .8); lid.current.position.set(lk * .8, .62 + Math.sin(clamp((k - .35) / .8, 0, 1) * Math.PI) * .6 - lk * .55, lk * .2); lid.current.rotation.z = -lk * 1.4
     tagRef.current.visible = k < .4
@@ -119,7 +119,10 @@ export default function Hero({ brand }) {
   const ndc = useMemo(() => new THREE.Vector2(), [])
 
   // reset per run
-  useEffect(() => { shared.hangAz = 0; shared.hangY = 6.6; shared.hangR = 21; Object.assign(shared.hangS, { az: 0, y: 6.6, r: 21 }); o.bob = null; o.prev = null; st8.auto = null; st8.drag = false; shared.dragging = false; shared.hookHi = -1; st8.pos.set(CRATE[0], CRATE[1] + .6, CRATE[2]); st8.scale = .9 }, [run])
+  useEffect(() => { shared.hangAz = 0; shared.hangY = 6.6; shared.hangR = 21; Object.assign(shared.hangS, { az: 0, y: 6.6, r: 21 }); o.bob = null; o.prev = null; st8.auto = null; st8.drag = false; shared.dragging = false; shared.hookHi = -1; st8.pos.set(CRATE[0], CRATE[1] + .6, CRATE[2]); st8.scale = .9
+    // invited: start by looking at the branch you were invited to
+    const p = useStore.getState(), ph = p.view === 'send' && p.parent ? shared.hooks[p.parent.hook] : null
+    if (ph) { shared.hangAz = Math.atan2(ph.n.x, ph.n.z); shared.hangY = clamp(ph.y + 1, 2.2, 13); shared.hangR = 15; Object.assign(shared.hangS, { az: shared.hangAz, y: shared.hangY, r: 15 }) } }, [run])
 
   // pointer handling for drag-and-drop (raycast against a shell hugging the tree)
   useEffect(() => {
@@ -185,16 +188,17 @@ export default function Hero({ brand }) {
   }
   // "Auto-hang": pick the best free hook facing the camera and fly there
   useEffect(() => useStore.subscribe((s, p) => { if (s.autoHang && !p.autoHang && s.phase === 'hang') {
-    useStore.setState({ autoHang: false }); const cam = camera.position, free = freeHooks()
+    useStore.setState({ autoHang: false }); const cam = camera.position, free = hangHooks()
     let best = -1, bs = -1e9; free.forEach(i => { const h = shared.hooks[i]; const toC = cam.clone().sub(h.p).setY(0).normalize(); const sc = h.n.dot(toC) * 3 - Math.abs(h.y - 6) * .4; if (sc > bs) { bs = sc; best = i } })
     if (best >= 0) { const h = shared.hooks[best]; st8.auto = { i: best, from: st8.pos.clone(), to: h.p.clone().addScaledVector(h.n, .35), t0: now() } } } }), [camera])
 
   useFrame((_, dtRaw) => {
     const s = useStore.getState(), t = now(), k = t - s.phaseAt, dt = Math.min(dtRaw, 1 / 30), D = DESIGNS[design]
-    const isSend = s.view === 'send', name = isSend ? s.myName : s.from
+    const isSend = s.view === 'send', name = s.view === 'open' ? s.from : s.myName
     // which phases show the hero
-    const visible = (isSend && ['engrave', 'hang', 'settling', 'crown', 'crowning', 'greeting', 'explore'].includes(s.phase) && s.view !== 'tree')
-      || (!isSend && s.view === 'open' && ['unwrap', 'hang', 'settling', 'crown', 'crowning', 'greeting', 'explore'].includes(s.phase))
+    const visible = (isSend && ['engrave', 'hang', 'settling', 'seal', 'wishfor', 'crown', 'crowning', 'greeting', 'explore'].includes(s.phase))
+      || (s.view === 'open' && ['unwrap', 'meet', 'wishfor'].includes(s.phase))
+      || (s.view === 'me' && ['mearrive', 'branch', 'parcels', 'gave', 'thanks', 'selfwish', 'explore'].includes(s.phase))
     shared.heroVisible = visible
     ;[parts.body, parts.cap, parts.loop, parts.tag, parts.thread].forEach(m => { if (m) m.visible = visible })
     if (!visible) { if (ring.current) ring.current.visible = false; if (hookPts.current) hookPts.current.visible = false; return }
@@ -213,6 +217,8 @@ export default function Hero({ brand }) {
       st8.scale = .9 + .7 * e; st8.spin = D.front + Math.sin(t * .8) * .35 * (1 - Math.min(1, s.myName.length)) + Math.sin(t * .6) * .12
     } else if (s.phase === 'unwrap') {
       const e = ease((k - .6) / 1.6); st8.pos.lerpVectors(V(CRATE[0], .3, CRATE[2]), V(...HELD), e); st8.scale = .2 + 1.5 * e; st8.spin = D.front + (1 - e) * 6 + Math.sin(t * .6) * .15
+    } else if (s.view === 'open' && (s.phase === 'meet' || s.phase === 'wishfor')) {
+      st8.pos.set(...HELD); st8.scale = 1.7; st8.spin = D.front + Math.sin(t * .6) * .15
     } else if (s.phase === 'hang') {
       if (st8.auto) { const a = st8.auto, e = ease((t - a.t0) / 1.2); const mid = a.from.clone().lerp(a.to, .5).add(V(0, 1.2, 0))
         st8.pos.set(0, 0, 0).addScaledVector(a.from, (1 - e) ** 2).addScaledVector(mid, 2 * e * (1 - e)).addScaledVector(a.to, e * e); if (e >= 1) { const i = a.i; st8.auto = null; attach(i) } }
@@ -223,7 +229,7 @@ export default function Hero({ brand }) {
       // nearest free hook
       let best = -1
       if (st8.drag) { let bd = 78; const W = size.width / 2, H = size.height / 2, pr = V(), toC = V()
-        for (const i of freeHooks()) { const h = shared.hooks[i]; toC.copy(camera.position).sub(h.p).setY(0).normalize(); if (h.n.dot(toC) < .15) continue
+        for (const i of hangHooks()) { const h = shared.hooks[i]; toC.copy(camera.position).sub(h.p).setY(0).normalize(); if (h.n.dot(toC) < .15) continue
           pr.copy(h.p).project(camera); const d = Math.hypot((pr.x - ndc.x) * W, (pr.y - ndc.y) * H); if (d < bd) { bd = d; best = i } }
         if (best >= 0) { const h = shared.hooks[best]; st8.target.copy(h.p).addScaledVector(h.n, .25).add(V(0, -.2, 0)) } }
       shared.hookHi = st8.drag ? best : -1
@@ -252,7 +258,7 @@ export default function Hero({ brand }) {
     if (ring.current) { const hi = shared.hookHi; ring.current.visible = hi >= 0
       if (hi >= 0) { ring.current.position.copy(shared.hooks[hi].p); ring.current.lookAt(camera.position); ring.current.scale.setScalar(1 + Math.sin(t * 8) * .12) } }
     if (hookPts.current) { hookPts.current.visible = s.phase === 'hang'
-      if (s.phase === 'hang') { const free = freeHooks(), a = hookPts.current.geometry.attributes.position; let n = 0
+      if (s.phase === 'hang') { const free = hangHooks(), a = hookPts.current.geometry.attributes.position; let n = 0
         for (const i of free) { const h = shared.hooks[i]; if (h.n.dot(camera.position.clone().sub(h.p).setY(0).normalize()) < .2) continue; a.setXYZ(n++, h.p.x, h.p.y, h.p.z) }
         a.needsUpdate = true; hookPts.current.geometry.setDrawRange(0, n); hookPts.current.material.opacity = .5 + Math.sin(t * 3) * .25 } }
   })
@@ -272,8 +278,8 @@ export default function Hero({ brand }) {
   const hookGeo = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(600 * 3), 3)); return g }, [])
   return (
     <group>
-      <Crate brand={brand} visible={view === 'send' && phase === 'choose'} />
-      <GiftBox brand={brand} from={from} visible={view === 'open' && ['gift', 'unwrap', 'hang'].includes(phase)} />
+      <Crate brand={brand} visible={phase === 'choose'} />
+      <GiftBox brand={brand} from={from} visible={view === 'open' && ['gift', 'unwrap', 'meet'].includes(phase)} />
       <primitive object={parts.body} />{parts.tag && <primitive object={parts.tag} />}<primitive object={parts.cap} /><primitive object={parts.loop} /><primitive object={parts.thread} />
       <mesh ref={ring} visible={false}><torusGeometry args={[.22, .025, 8, 32]} /><meshBasicMaterial color={[3, 2.4, 1.2]} toneMapped={false} /></mesh>
       <points ref={hookPts} geometry={hookGeo} frustumCulled={false}><pointsMaterial map={glow} color={0xffd27a} size={.45} transparent opacity={.6} depthWrite={false} blending={THREE.AdditiveBlending} /></points>

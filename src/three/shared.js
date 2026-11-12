@@ -12,8 +12,9 @@ export const shared = window.__shared = {
   focusPos: null, focusHook: -1,
   snapshot: null,       // fn(name) -> dataURL of the hero close-up
   skipArrival: false,
+  reserved: new Set(),  // hooks kept free for the people invited to the branch on show
 }
-const AFTER_LIGHT = new Set(['choose', 'engrave', 'gift', 'unwrap', 'hang', 'settling', 'crown', 'crowning', 'greeting', 'explore'])
+const AFTER_LIGHT = new Set(['choose', 'engrave', 'gift', 'unwrap', 'hang', 'settling', 'crown', 'crowning', 'greeting', 'explore', 'meet', 'seal', 'wishfor', 'mearrive', 'branch', 'parcels', 'gave', 'thanks', 'selfwish'])
 /** 0 = dark square, 1 = everything lit. */
 export function litLevel() {
   const s = useStore.getState()
