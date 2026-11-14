@@ -6,13 +6,13 @@ import { ago } from '../lib/util'
 import { copy as words, money } from '../../shared/copy.js'
 import { ensure, setSound, chime, bells } from '../lib/audio'
 import { post } from '../lib/api'
-import { Greeting, Meet, SealSelf, WishFor, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
+import { Greeting, Meet, SealSelf, WishFor, WishTo, TreeSheet, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
 import { PoiLabels, Minimap, PoiCard } from './WalkHUD'
 import { walkToOrnament } from '../three/Walk'
 
-const startOwn = () => { useStore.setState(st => ({ view: 'send', myName: '', engraveTimes: [], heroHook: -1, focus: null, poi: null, cardP: null, run: st.run + 1 })); useStore.getState().setPhase('choose') }
+const startOwn = () => useStore.getState().beginOwn()
 
 /** The site's own mark: a small tree with a star. */
 const Mark = ({ big }) => <svg className={'mark' + (big ? ' big' : '')} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l1 2.2 2.3.2-1.8 1.5.6 2.3L12 6.5 9.9 7.7l.6-2.3L8.7 3.9l2.3-.2z" fill="#f2c46d" /><path d="M12 7l5 6h-2.6l3.6 5H6l3.6-5H7z" fill="#2f7a4d" /><rect x="11" y="18" width="2" height="3.5" rx=".5" fill="#8a5a33" /></svg>
@@ -48,7 +48,7 @@ export default function Overlay({ brand }) {
       {phase === 'choose' && <Chooser />}
       {phase === 'engrave' && <Engrave />}
       {phase === 'hang' && <>
-        <div className="pill"><Hand />{s.parent ? `Drag your ornament onto ${s.from}'s branch` : 'Drag your ornament onto a glowing hook'}</div>
+        <div className="pill"><Hand />{s.parent ? `Drag your ornament next to ${s.from}'s` : 'Drag your ornament onto a glowing hook'}</div>
         <div className="turn-hint">Drag to go round · pinch or double-tap to zoom</div>
         <div className="zoom"><button type="button" aria-label="Zoom in" onClick={() => shared.zoomBy?.(.75)}>+</button><button type="button" aria-label="Zoom out" onClick={() => shared.zoomBy?.(1.33)}>−</button></div>
         <button type="button" className="turn l" aria-label="Turn left around the tree" onClick={() => { shared.hangAz += .7 }}><Arrow d="m15 18-6-6 6-6" /></button>
@@ -68,6 +68,8 @@ export default function Overlay({ brand }) {
       {phase === 'thanks' && <Thanks brand={brand} />}
       {phase === 'selfwish' && <SelfCoda />}
       {phase === 'explore' && (view === 'keepsake' ? <Keepsake brand={brand} /> : <Explore brand={brand} />)}
+      {s.treeShare && <TreeSheet onClose={() => useStore.setState({ treeShare: false })} />}
+      {s.wishTo && <WishTo />}
       <Labels />
       <Toast />
       <div className="topbar">
@@ -85,14 +87,14 @@ export default function Overlay({ brand }) {
 }
 
 function Chooser() {
-  const sel = useStore(s => s.sel), D = DESIGN_META[sel]
+  const sel = useStore(s => s.sel), made = useStore(s => s.made), D = DESIGN_META[sel]
   const go = d => { useStore.setState({ sel: (sel + d + 8) % 8 }); chime([1046.5], 0, .05) }
   const sx = useRef(null)
   return (
     <div className="chooser" onPointerDown={e => sx.current = e.clientX} onPointerUp={e => { if (sx.current != null && Math.abs(e.clientX - sx.current) > 50) go(e.clientX < sx.current ? 1 : -1); sx.current = null }}>
       <div className="lbl">
         <button type="button" className="arrow" aria-label="Previous ornament" onClick={() => go(-1)}><Arrow d="m15 18-6-6 6-6" /></button>
-        <div className="nm2">{D.label}<small>{D.sub}</small></div>
+        <div className="nm2">{D.label}<small>{made && made.design === sel ? `${made.from} picked this one for you` : D.sub}</small></div>
         <button type="button" className="arrow" aria-label="Next ornament" onClick={() => go(1)}><Arrow d="m9 18 6-6-6-6" /></button>
       </div>
       <div className="dots">{DESIGN_META.map((_, i) => <i key={i} className={i === sel ? 'on' : ''} />)}</div>
@@ -132,6 +134,8 @@ function Chip() {
 function Explore({ brand }) {
   const s = useStore(), [hint, setHint] = useState(true), [open, setOpen] = useState(false), walking = s.exploreMode === 'walk'
   useEffect(() => { setHint(true); const t = setTimeout(() => setHint(false), 6000); return () => clearTimeout(t) }, [s.exploreMode])
+  // on a tree for your own people, any ornament can be wished from its name card
+  const canWish = o => s.tree.kind === 'community' && s.clock.phase !== 'keepsake' && !o.you && o.cid && o.cid !== s.mine?.id
   const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'open' ? s.from : s.myName, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
   const g = s.tree.giving, pct = g ? Math.min(100, g.given / g.cap * 100) : 0, empty = s.counts.ornaments === 0
   const rows = s.ornaments.slice(0, 8).map(o => ({ n: o.name, when: ago(Math.max(0, Math.round((Date.now() - o.at) / 60000))) }))
@@ -143,6 +147,7 @@ function Explore({ brand }) {
     {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
     {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
     {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'open' ? 'just now' : 'your ornament') : `hung ${ago(fo.mins)}`}</span></div>
+      {canWish(fo) && (s.wished.includes(fo.cid) ? <span className="done">Wished ✓</span> : <button type="button" className="btn primary" onClick={() => useStore.setState({ wishTo: { id: fo.cid, name: fo.name } })}>Leave a wish</button>)}
       <button type="button" className="x" aria-label="Close" onClick={() => useStore.setState({ focus: null })}>×</button></div>}
     {s.view === 'tree' && !fo && <div className={'sheet' + (open ? '' : ' peek')}>
       <button type="button" className="grab" aria-expanded={open} onClick={() => setOpen(!open)}><span className="t1">{s.tree.name}</span><span className="t2">{empty ? 'Be the first to hang an ornament' : words.treeLine({ giving: g, counts: s.counts })} · {open ? 'tap to close' : 'tap for details'}</span></button>
@@ -154,7 +159,7 @@ function Explore({ brand }) {
           : <><div className="stat"><b>{s.counts.ornaments.toLocaleString('en-GB')}</b><span>{s.counts.ornaments === 1 ? 'ORNAMENT' : 'ORNAMENTS'}</span></div><div className="stat"><b>{s.counts.wishes.toLocaleString('en-GB')}</b><span>{s.counts.wishes === 1 ? 'WISH SHARED' : 'WISHES SHARED'}</span></div></>}</div>
         {g && <div className="pot"><div className="tr"><i style={{ width: pct.toFixed(1) + '%' }} /></div><div className="lb"><span>{Math.round(pct)}% of the {money(g.cap)} pot</span><span>{g.given >= g.cap ? 'Complete' : `${money(g.cap - g.given)} left`}</span></div></div>}
         {rows.length > 0 && <div className="list"><h4>Just hung</h4>{rows.map((r, i) => <div key={i} className="r"><span className="tt" /><div className="w">{r.n}<small>hung an ornament · {r.when}</small></div></div>)}</div>}
-        <button type="button" className="btn primary" onClick={() => s.openTree(s.tree.slug, { fresh: !s.mine })}>{s.mine ? 'Go to my branch' : 'Hang an ornament'}</button>
+        <button type="button" className="btn primary" onClick={() => s.openTree(s.tree.slug, { fresh: !s.mine })}>{s.mine ? 'Go to my ornament' : 'Hang an ornament'}</button>
         {s.tree.kind === 'community' && <TreeLinks />}
       </div>
     </div>}
@@ -163,10 +168,9 @@ function Explore({ brand }) {
 
 /** A tree someone created: share its own link, or report it. */
 function TreeLinks() {
-  const s = useStore(), link = `${location.origin}/t/${s.tree.slug}`, [reported, setReported] = useState(false)
-  const copyLink = () => { try { navigator.clipboard.writeText(link).then(() => s.toastMsg("The tree's link is copied"), () => s.toastMsg(link)) } catch (e) { s.toastMsg(link) } }
+  const s = useStore(), [reported, setReported] = useState(false)
   const report = () => { post(`tree/${s.tree.slug}/report`).catch(() => {}); setReported(true); s.toastMsg("Thanks. We'll take a look at this tree.") }
-  return <div className="btnrow"><button type="button" className="btn ghost" onClick={copyLink}>Copy this tree's link</button><button type="button" className="btn text" disabled={reported} onClick={report}>{reported ? 'Reported' : 'Report this tree'}</button></div>
+  return <div className="btnrow"><button type="button" className="btn ghost" onClick={() => useStore.setState({ treeShare: true })}>Invite people to this tree</button><button type="button" className="btn text" disabled={reported} onClick={report}>{reported ? 'Reported' : 'Report this tree'}</button></div>
 }
 
 function Labels() {

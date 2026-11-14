@@ -65,6 +65,8 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
       const w = { id: rid(12), to, from, text, kind, device, status, at, opened: false, reported: false }
       s.wishes[w.id] = w; (s.wishList[to] ||= []).push(w.id); persist(); return copy(w)
     },
+    /** The ornaments on a tree this device has left a wish for. */
+    async wishedOn(slug, device) { purge(); return [...new Set(Object.values(s.wishes).filter(w => w.kind === 'friend' && w.device === device && s.cards[w.to]?.tree === slug).map(w => w.to))] },
     async hasWished(cardId, device) { purge(); return Object.values(s.wishes).some(w => w.to === cardId && w.kind === 'friend' && w.device === device) },
     async wishesFor(cardId) { purge(); return (s.wishList[cardId] || []).map(id => s.wishes[id]).filter(Boolean).map(copy) },
     async getWish(id) { purge(); return copy(s.wishes[id]) },
@@ -75,9 +77,9 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
     async oldestWaiting() { purge(); const q = Object.values(s.wishes).filter(w => w.status === 'review'); return q.length ? Math.min(...q.map(w => w.at)) : null },
 
     // ---- wishes sent to someone who has no ornament yet ----
-    async sendWish({ tree, from, to, text, device, status, at }) { purge(); const token = rid(24); s.sent[token] = { token, tree, from, to, text, device, status, at, claimedBy: null, claimedAt: null }; persist(); return { token } },
+    async sendWish({ tree, from, to, text, design = null, device, status, at }) { purge(); const token = rid(24); s.sent[token] = { token, tree, from, to, text, design, device, status, at, claimedBy: null, claimedAt: null }; persist(); return { token } },
     /** Never includes the words. */
-    async getSentWish(token) { purge(); const w = s.sent[token]; return w ? { token: w.token, tree: w.tree, from: w.from, to: w.to, device: w.device, status: w.status, claimedBy: w.claimedBy } : null },
+    async getSentWish(token) { purge(); const w = s.sent[token]; return w ? { token: w.token, tree: w.tree, from: w.from, to: w.to, design: w.design ?? null, device: w.device, status: w.status, claimedBy: w.claimedBy } : null },
     /** Turns a sent wish into an ordinary wish for this card. Once, and never for its own sender. */
     async claimSentWish(token, cardId, at) {
       purge(); const w = s.sent[token], c = s.cards[cardId]
