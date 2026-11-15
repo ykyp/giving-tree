@@ -41,7 +41,10 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
     /** Newest first. `since` is the cursor from the last call; only newer ornaments come back. */
     async latestOrnaments(slug, since = 0, n = 120) {
       const list = cardsOf(slug).filter(c => !c.hidden && c.seq > since).sort((a, b) => b.seq - a.seq).slice(0, n)
-      return { ornaments: list.map(c => ({ id: c.id, name: c.name, design: c.design, hook: c.hook, parent: c.parent, at: c.at })), cursor: Math.max(since, ...cardsOf(slug).map(c => c.seq), 0) }
+      // each ornament's own wish, open to anyone, when it passed the word check and has not been reported
+      const open = id => { const w = (s.wishList[id] || []).map(i => s.wishes[i]).find(w => w && w.kind === 'self' && w.status === 'ok'); return w ? w.text : null }
+      purge()
+      return { ornaments: list.map(c => ({ id: c.id, name: c.name, design: c.design, hook: c.hook, parent: c.parent, at: c.at, wish: open(c.id) })), cursor: Math.max(since, ...cardsOf(slug).map(c => c.seq), 0) }
     },
     async keepsakeNames(slug) { return cardsOf(slug).filter(c => !c.hidden).sort((a, b) => a.seq - b.seq).map(c => c.name) },
 

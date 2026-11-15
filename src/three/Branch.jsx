@@ -27,7 +27,7 @@ function Parcel({ p, slot, brand }) {
     const shake = !reduceMotion && k < 0 && s.phase === 'parcels' ? Math.sin(t * 15 + ph) * Math.max(0, Math.sin(t * 1.3 + ph)) * .09 : 0
     g.current.rotation.z = shake; g.current.rotation.y = ph
   })
-  const onClick = e => { e.stopPropagation(); const s = useStore.getState(); if (s.phase === 'parcels' && p.kind === 'friend') s.openParcel(p.id); if (s.phase === 'selfwish' && p.kind === 'self') s.openParcel(p.id) }
+  const onClick = e => { e.stopPropagation(); const s = useStore.getState(); if (s.phase === 'parcels' && p.kind === 'friend') s.openParcel(p.id); if (p.kind === 'self' && p.text && s.mine) useStore.setState({ reading: { id: s.mine.id, name: s.myName, text: p.text } }) }
   return (
     <group ref={g} position={slot} onClick={onClick}>
       <mesh geometry={boxG} material={mat} />

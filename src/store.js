@@ -17,7 +17,7 @@ export const GLOBAL = { slug: 'global', name: 'The Giving Tree', kind: 'global',
 let demoDate = lsGet('gt-demo-date') || '', ticking = null, polling = null
 const clockNow = () => demoDate ? new Date(demoDate) : new Date()
 const today = () => localDay(clockNow())
-const wrapUp = s => s.parcels.find(p => p.kind === 'self' && !p.opened) ? 'selfwish' : 'explore'
+const wrapUp = () => 'explore'
 /** Screens where the whole tree is in view, so newly hung ornaments are worth fetching. */
 const WATCHING = new Set(['greeting', 'explore', 'branch', 'crown', 'dark'])
 
@@ -42,7 +42,8 @@ export const useStore = create((set, get) => ({
   apiInfo: null, unreachable: false, clock: clockOf(clockNow()), demoDate,
   mine: null, cardP: null, parent: null, thanksFrom: null, me: null, parcels: [], wishOpen: null, branchName: null,
   // wishing: the ornaments on this tree this phone has wished, the one being wished now, and the name last signed with
-  wished: [], wishTo: null, treeShare: false, wisher: lsGet('gt3-wisher') || '', made: null,
+  wished: [], wishTo: null, treeShare: false, reading: null, // reading: { id, name, text } the ornament's wish being read
+  wisher: lsGet('gt3-wisher') || '', made: null,
   branchView: null, // { hook, owner?, kids } the branch shown on the tree (no owner: the hero ornament is the owner)
 
   setPhase: phase => set({ phase, phaseAt: now() }),
@@ -154,7 +155,10 @@ export const useStore = create((set, get) => ({
     const s = get(); if (!s.parent) return
     apiPost('open', { id: s.parent.id }).then(r => set(st => ({ openResult: r, tree: r.tree || st.tree, tick: st.tick + 1 }))).catch(() => set({ openResult: { counted: false, reason: 'error' } }))
   },
-  sealSelf: async text => { const c = await get().createCard(); const r = await apiPost(`me/${c.token}/wish`, { text }); set(s => ({ parcels: [...s.parcels, { id: r.id, from: s.myName, kind: 'self', opened: false }] })) },
+  /** The wish on your own ornament: in its box, open to everyone who visits the tree. */
+  sealSelf: async text => { const c = get().mine || await get().createCard(); const r = await apiPost(`me/${c.token}/wish`, { text }); set(s => ({ parcels: [...s.parcels.filter(p => p.kind !== 'self'), { id: r.id, from: s.myName, kind: 'self', opened: true, text }] })) },
+  /** Reports the wish on someone's ornament: it comes off the tree at once. */
+  reportOpenWish: id => { apiPost(`card/${id}/report`).catch(() => {}); set(st => ({ reading: null, ornaments: st.ornaments.map(o => o.id === id ? { ...o, wish: null } : o), parent: st.parent?.id === id ? { ...st.parent, wish: null } : st.parent })); get().toastMsg("Thanks. We've taken it down and will review it.") },
   /** Leaves a wish under someone's ornament. `from` is the name it is signed with. */
   sealTo: async (id, text, from) => { await apiPost('wish', { to: id, from, text }); lsSet('gt3-wisher', from)
     set(st => ({ wisher: from, wished: st.wished.includes(id) ? st.wished : [...st.wished, id], parent: st.parent?.id === id ? { ...st.parent, left: true } : st.parent })) },

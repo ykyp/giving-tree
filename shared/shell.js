@@ -30,30 +30,31 @@ ${headTags({ ...p, origin })}
 </head><body><div id="root">${p.body}</div></body></html>`
 }
 /** The home page's words, shared with src/pages/Home.jsx so the page reads the same before and after its script runs. */
-export const LEDE = 'Hang an ornament with your name on it and ask the people you love for a wish. Every wish stays wrapped under your ornament until Christmas morning, then opens for you alone.'
+export const LEDE = 'Hang an ornament with your name on it and your wish inside. Friends open it, hang their own, and can leave you a wish back that stays wrapped until Christmas morning.'
+export const FINE = 'No accounts and no passwords. First names only. The wish on your ornament can be read by anyone who visits the tree; wishes left for you are private to you. Everything is deleted on 1 February 2027.'
 export const WAYS = [
-  { href: '/t/global', mode: null, title: 'Hang your ornament', text: 'On the Giving Tree, the tree everyone shares.' },
-  { href: '/?start=tree', mode: 'tree', title: 'Start a tree for your people', text: 'A family, a class, a flat, a team. Everyone on it can wish everyone else.' },
+  { href: '/t/global', mode: null, title: 'Hang your ornament', text: 'With your wish inside, on the Giving Tree everyone shares.' },
+  { href: '/?start=tree', mode: 'tree', title: 'Start a tree for your people', text: 'A family, a class, a flat, a team. Everyone adds a wish and opens each other\'s.' },
   { href: '/?start=wish', mode: 'wish', title: 'Make an ornament for a friend', text: 'Pick one, add their name and a wish. They hang it, and open the wish on Christmas morning.' },
 ]
 const pre = inner => `<main class="pre">${inner}</main>`
 
 export const pages = {
   home: () => ({ path: '/', imageAlt: 'A Christmas tree hung with ornaments in a snowy village square at night', title: `${SITE}: hang an ornament, send a wish`,
-    description: 'Hang an ornament with your name on it, ask the people you love for a wish, and open them all on Christmas morning.',
+    description: 'Hang an ornament with your name on it and your wish inside. Friends open it, hang their own, and leave you a wish back for Christmas morning.',
     body: pre(`<h1>${SITE}</h1>
 <p class="lede">${LEDE}</p>
 <nav class="ways" aria-label="Ways to begin">
 ${WAYS.map(w => `<a class="way" href="${w.href}"><b>${w.title}</b><span>${w.text}</span></a>`).join('\n')}
 </nav>
-<p class="fine">No accounts and no passwords. First names only. Wishes are private to the person they were written for, and are deleted on 1 February 2027.</p>`) }),
+<p class="fine">${FINE}</p>`) }),
   tree: ({ tree, counts }) => ({ path: `/t/${tree.slug}`, noindex: tree.kind !== 'global', title: tree.kind === 'global' ? SITE : `${tree.name} · ${SITE}`, description: copy.treeText(counts),
     body: pre(`<h1>${esc(tree.name)}</h1>
 <p class="lede">${counts.ornaments > 0 ? `${plural(counts.ornaments, 'ornament')} hung so far, and ${plural(counts.wishes, 'wish', 'wishes')} waiting for Christmas morning.` : 'No ornaments yet. Be the first to hang one.'}</p>
-<p>Hang an ornament with your name on it and ask the people you love for a wish. Each wish stays wrapped under your ornament until Christmas morning.</p>
+<p>Hang an ornament with your name on it and your wish inside. Walk round the tree and open the wishes other people have hung. Leave someone a wish back, and it stays wrapped under their ornament until Christmas morning.</p>
 <p class="fine">The tree is loading. <a href="/">About the Giving Tree</a></p>`) }),
   card: ({ card, tree, late, image }) => ({ path: `/c/${card.id}`, noindex: true, image, imageAlt: `${card.name}'s ornament on the tree`, title: copy.previewTitle({ name: card.name }), description: copy.previewText({ giving: tree.giving, thanks: false, waiting: 0, late }),
-    body: pre(`<h1>${esc(card.name)} hung an ornament on ${esc(tree.name)}</h1><p class="lede">Leave ${esc(card.name)} a wish${late ? '' : ' for Christmas morning'}, then hang yours next to theirs.</p><p class="fine">The tree is loading.</p>`) }),
+    body: pre(`<h1>${esc(card.name)} hung an ornament on ${esc(tree.name)}</h1><p class="lede">Open ${esc(card.name)}'s wish, then hang yours next to theirs.</p><p class="fine">The tree is loading.</p>`) }),
   thanks: ({ card, tree, given, image }) => ({ path: `/c/${card.id}?t=1`, noindex: true, image, imageAlt: `${card.name}'s ornament on the tree`, title: copy.previewTitle({ name: card.name, branchName: card.branchName, thanks: true }), description: copy.previewText({ giving: tree.giving, thanks: true, given }),
     body: pre(`<h1>Thank you from ${esc(card.branchName || card.name)}</h1><p class="lede">Open the wishes waiting for you.</p><p class="fine">The tree is loading.</p>`) }),
   sent: ({ sent, tree }) => ({ path: '/w/', noindex: true, image: '/og-wish.jpg', imageAlt: 'A wrapped parcel under a Christmas tree', title: `An ornament for ${sent.to}, from ${sent.from}`, description: `${sent.from} made ${sent.to} an ornament on ${tree.name}, with a wish under it. Hang it to keep the wish.`,

@@ -35,9 +35,10 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
       return { ornaments: r.ornaments, wishes: wiped() ? 0 : r.wishes }
     },
     async latestOrnaments(slug, since = 0, n = 120) {
-      const rows = await sql`select id, name, design, hook, parent, at from cards where tree = ${slug} and not hidden and seq > ${since} order by seq desc limit ${n}`
+      const rows = await sql`select c.id, c.name, c.design, c.hook, c.parent, c.at, w.body as wish from cards c left join wishes w on w.card_id = c.id and w.kind = 'self' and w.status = 'ok'
+        where c.tree = ${slug} and not c.hidden and c.seq > ${since} order by c.seq desc limit ${n}`
       const [c] = await sql`select coalesce(max(seq), 0)::bigint as cursor from cards where tree = ${slug}`
-      return { ornaments: rows.map(r => ({ id: r.id, name: r.name, design: r.design, hook: r.hook, parent: r.parent, at: Number(r.at) })), cursor: Math.max(Number(since) || 0, Number(c.cursor)) }
+      return { ornaments: rows.map(r => ({ id: r.id, name: r.name, design: r.design, hook: r.hook, parent: r.parent, at: Number(r.at), wish: wiped() ? null : r.wish })), cursor: Math.max(Number(since) || 0, Number(c.cursor)) }
     },
     async keepsakeNames(slug) { return (await sql`select name from cards where tree = ${slug} and not hidden order by seq`).map(r => r.name) },
 

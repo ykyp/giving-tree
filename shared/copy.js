@@ -9,7 +9,7 @@ const shortCharity = g => g.charity.name.replace(/^a UK /, 'a ')
 
 export const copy = {
   /** The message someone sends to ask people for a wish. */
-  invite: ({ late }) => `I hung an ornament on the Giving Tree. Leave me a wish${late ? '' : ' for Christmas morning'}, then hang yours next to mine 🎄`,
+  invite: () => 'I hung an ornament on the Giving Tree, with my wish inside. Open it, then hang yours next to mine 🎄',
   /** The thank-you message on and after 25 December. */
   thanks: ({ giving, given, nye }) => {
     const gave = giving && given > 0 ? ` ${nye ? 'We' : 'Our branch'} gave ${money(given)} to ${shortCharity(giving)}.` : ''
@@ -19,7 +19,7 @@ export const copy = {
   previewTitle: ({ name, branchName, thanks }) => thanks ? `Thank you from ${branchName || name}` : `${name} hung an ornament on the Giving Tree`,
   previewText: ({ giving, thanks, waiting, given, late }) => {
     if (thanks) return giving && given > 0 ? `Our branch gave ${money(given)} to ${giving.charity.name}. Open yours.` : 'Open the wishes waiting for you.'
-    const wishes = late ? 'Leave them a wish.' : waiting > 0 ? `${plural(waiting, 'wish', 'wishes')} waiting.` : 'Leave them a wish for Christmas morning.'
+    const wishes = 'Open the wish inside.'
     return giving ? `${wishes} Open it and ${giving.sponsor} gives ${amt(giving.perGift)} to ${giving.charity.name}.` : `${wishes} Then hang yours next to theirs.`
   },
   /** Link preview for a tree. */
@@ -27,7 +27,7 @@ export const copy = {
   treeText: ({ ornaments }) => ornaments > 0 ? `${plural(ornaments, 'ornament')} so far. Hang yours, and send wishes to the people you love.` : 'Hang an ornament, and send wishes to the people you love.',
   /** Shown under the greeting once your ornament is on the tree. */
   greetingNote: ({ giving, own }) => giving ? `${giving.sponsor} gives ${amt(giving.perGift)} to ${giving.charity.name} each time someone new opens your card, up to ${money(giving.cap)} in total.`
-    : own ? 'Everyone on this tree can leave each other a wish. Each one stays wrapped under its ornament until Christmas morning.' : 'Ask the people you love for a wish. Each one waits under your ornament until Christmas morning.',
+    : own ? 'Everyone on this tree can open each other\'s wishes and leave one back, wrapped until Christmas morning.' : 'Share your ornament. Friends open your wish, hang their own, and can leave you one back for Christmas morning.',
   /** What an invited person is told about the open. Null means say nothing. */
   openLine: ({ giving, result, from }) => {
     if (!giving || !result) return null
@@ -38,7 +38,7 @@ export const copy = {
   /** The Christmas summary under "Your branch". */
   summary: ({ giving, stats }) => giving
     ? { figures: [[stats.ornaments, plural(stats.ornaments, 'ORNAMENT').split(' ')[1]], [stats.gifts, 'CARDS OPENED'], [money(stats.given), 'GIVEN']], line: `to ${giving.charity.name}. The whole tree has given ${money(giving.given)}${giving.given >= giving.cap ? '. The pot is complete: thank you.' : '.'}` }
-    : { figures: [[stats.ornaments, stats.ornaments === 1 ? 'ORNAMENT' : 'ORNAMENTS'], [stats.wishes, stats.wishes === 1 ? 'WISH SHARED' : 'WISHES SHARED']], line: stats.ornaments > 1 ? 'Yours, and one for everyone who hung theirs next to you.' : 'Ask people for a wish and watch it grow.' },
+    : { figures: [[stats.ornaments, stats.ornaments === 1 ? 'ORNAMENT' : 'ORNAMENTS'], [stats.wishes, stats.wishes === 1 ? 'WISH SHARED' : 'WISHES SHARED']], line: stats.ornaments > 1 ? 'Yours, and one for everyone who hung theirs next to you.' : 'Share your ornament and watch it grow.' },
   /** The tree's details and the keepsake. */
   treeLine: ({ giving, counts }) => giving ? `${money(giving.given)} given · ${plural(counts.ornaments, 'ornament')}` : `${plural(counts.ornaments, 'ornament')} · ${plural(counts.wishes, 'wish', 'wishes')}`,
   disclosure: ({ giving }) => giving ? `${giving.sponsor} gives ${amt(giving.perGift)} to ${giving.charity.name} (reg. ${giving.charity.reg}) for every card opened, up to ${money(giving.cap)}${giving.starts ? `, ${giving.starts} to ${giving.ends}` : ''}.${giving.payout ? ` ${giving.payout}.` : ''}` : null,
@@ -46,7 +46,7 @@ export const copy = {
   /** The message that goes with an ornament made for a friend. */
   sentMessage: ({ to, late }) => `${to}, I made you an ornament on the Giving Tree, with a wish under it. Hang it to keep the wish${late ? '' : ' and open it on Christmas morning'} 🎁`,
   /** The message that goes with the link of a tree made for a group. */
-  treeInvite: ({ name }) => `Hang your ornament on ${name}, our tree on the Giving Tree. We can all leave each other a wish for Christmas morning 🎄`,
+  treeInvite: ({ name }) => `Hang your ornament on ${name}, our tree on the Giving Tree. Add your wish, and open everyone else's 🎄`,
   /** When the wishes open, in the visitor's own days. */
   opens: ({ days }) => days > 1 ? `opens in ${days} days` : days === 1 ? 'opens tomorrow' : 'open now',
   calendar: ({ url }) => ({ summary: 'Open your Christmas wishes 🎁', description: `Your wishes are waiting on the Giving Tree: ${url}` }),

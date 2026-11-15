@@ -10,7 +10,7 @@ import { givingComplete } from './repo-memory.js'
 const BOT = /bot\b|bot\/|crawl|spider|facebookexternalhit|whatsapp|slack|telegram|discord|linkedin|skypeuripreview|preview/i
 const EVENTS = new Set(['share_v1', 'share_v2', 'saved_calendar', 'saved_selfsend'])
 // per device: 3 cards a day on a tree, 10 wishes an hour (40 on a tree for your own people, where everyone wishes everyone), 2 new trees a day
-const LIMITS = { card: [864e5, 3], wish: [36e5, 10], wishOwn: [36e5, 40], tree: [864e5, 2], log: [6e4, 20] }
+const LIMITS = { report: [36e5, 5], card: [864e5, 3], wish: [36e5, 10], wishOwn: [36e5, 40], tree: [864e5, 2], log: [6e4, 20] }
 const REPORTS_TO_TAKE_DOWN = 3
 const TREE_NAME_MAX = 40
 const ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -23,6 +23,8 @@ const isoDay = t => new Date(t).toISOString().slice(0, 10)
 const dayOf = (v, t) => /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : isoDay(t)
 const pub = c => ({ id: c.id, name: c.name, design: c.design, hook: c.hook })
 const visible = list => list.filter(w => w.status === 'ok')
+/** The wish an ornament's owner wrote on it. Open to anyone who can see the ornament; never one held for review. */
+const ownWish = list => list.find(w => w.kind === 'self' && w.status === 'ok') || null
 
 /** What the page may know about a tree's giving. Null unless giving is switched on with every setting in place. */
 function givingOf(tree) {
@@ -79,7 +81,7 @@ async function route(req, repo, env, ctx) {
   if (GET && a === 'keepsake') { const tree = await treeBySlug(repo, b1 || 'global'); return { tree: treeView(tree), counts: await repo.counts(tree.slug), names: (await repo.keepsakeNames(tree.slug)).slice(0, 20000) } }
 
   // ---- cards ----
-  if (POST && a === 'card') {
+  if (POST && a === 'card' && !b1) {
     const c = await createCard(repo, t, device, body), out = { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree }
     // hung from a wish someone sent: the wish goes under this ornament. A failed claim never loses the ornament.
     if (body.sent) out.sent = await repo.claimSentWish(String(body.sent), c.id, t)
@@ -87,7 +89,13 @@ async function route(req, repo, env, ctx) {
   }
   if (GET && a === 'card') {
     const c = await cardById(repo, b1), wishes = visible(await repo.wishesFor(c.id)), b = await branchView(repo, c)
-    return { ...pub(c), tree: treeView(await repo.getTree(c.tree)), branch: { name: b.name, kids: b.kids }, waiting: wishes.filter(w => w.kind === 'friend').length, left: await repo.hasWished(c.id, device), own: c.device === device }
+    return { ...pub(c), wish: ownWish(wishes)?.text || null, tree: treeView(await repo.getTree(c.tree)), branch: { name: b.name, kids: b.kids }, waiting: wishes.filter(w => w.kind === 'friend').length, left: await repo.hasWished(c.id, device), own: c.device === device }
+  }
+
+  // Anyone can report the wish on an ornament. One report takes it off the tree until the team has looked.
+  if (POST && a === 'card' && b2 === 'report') {
+    const c = await cardById(repo, b1), w = ownWish(await repo.wishesFor(c.id)); if (!w) throw fail(404, 'no_wish')
+    await limit(repo, device, 'report', null, t); await repo.reportWish(w.id); return { ok: true }
   }
 
   // A card is opened. With giving off (the default) this is only recorded. With giving on: first open from a new
@@ -179,12 +187,13 @@ async function route(req, repo, env, ctx) {
     const c = await cardByToken(repo, b1), tree = await repo.getTree(c.tree), giving = givingOf(tree)
     if (GET && !b2) {
       if (c.removedAt) return { removed: true, tree: treeView(tree) }
-      const released = isReleased(t, dayOf(query.day, t)), list = visible(await repo.wishesFor(c.id)), b = await branchView(repo, c)
+      // the owner always sees their own wish, even while it waits for review
+      const released = isReleased(t, dayOf(query.day, t)), list = (await repo.wishesFor(c.id)).filter(w => w.status === 'ok' || (w.kind === 'self' && w.status === 'review')), b = await branchView(repo, c)
       if (released && await repo.markReturned(c.id)) await repo.addEvent(c.tree, 'returned', t)
       return { card: { id: c.id, token: c.token, name: c.name, design: c.design, hook: c.hook, parent: c.parent, tree: c.tree }, tree: treeView(tree), counts: await repo.counts(c.tree), released,
         branch: { name: b.name, kids: b.kids }, reminded: await repo.hasReminder(c.token),
         stats: { ornaments: 1 + b.kids.length, wishes: list.filter(w => w.kind === 'friend').length, opened: b.opened, ...(giving ? { gifts: b.gifts, given: b.gifts * giving.perGift } : {}) },
-        wishes: list.map(w => ({ id: w.id, from: w.from, kind: w.kind, opened: w.opened, ...(released ? { text: w.text } : {}) })) }
+        wishes: list.map(w => ({ id: w.id, from: w.from, kind: w.kind, opened: w.opened, ...(released || w.kind === 'self' ? { text: w.text } : {}) })) }
     }
     if (POST && b2 === 'branch') { const n = String(body.name || '').trim().slice(0, BRANCH_MAX); if (n && badName(n)) throw fail(400, 'bad_name'); await repo.setBranchName(c.id, n || null); return { name: n || null } }
     if (POST && b2 === 'wish') {
