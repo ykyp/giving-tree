@@ -19,7 +19,7 @@ const AFTER_LIGHT = new Set(['choose', 'engrave', 'gift', 'unwrap', 'hang', 'set
 export function litLevel() {
   const s = useStore.getState()
   if (s.phase === 'lighting') return clamp((now() - s.phaseAt) / 4.2, 0, 1)
-  return AFTER_LIGHT.has(s.phase) ? 1 : 0
+  return AFTER_LIGHT.has(s.phase) || s.lit ? 1 : 0 // a tree this phone has lit before is already lit when it walks in
 }
 export const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d')
   const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.22, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)')

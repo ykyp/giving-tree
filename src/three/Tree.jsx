@@ -161,7 +161,7 @@ export default function Tree({ tier, brand }) {
       lights.bulbs.instanceColor.needsUpdate = true }
     if (halo.current) { halo.current.material.opacity = L * 0.22 * pulse; const c = camera.position, l = Math.hypot(c.x, c.z) || 1; halo.current.position.set(-c.x / l * 6, 6.6, -c.z / l * 6) }
     // star: floats above the tree in 'crown', drops onto the top in 'crowning', sits there afterwards
-    const ph = st.phase, show = ['crown', 'crowning', 'greeting', 'explore', 'mearrive', 'branch', 'parcels', 'gave', 'thanks', 'selfwish'].includes(ph)
+    const ph = st.phase, show = ['crown', 'crowning', 'greeting', 'explore', 'mearrive', 'branch', 'parcels', 'gave', 'thanks', 'selfwish'].includes(ph) || (st.starred && ph !== 'crown' && ph !== 'crowning')
     if (topper.current) { topper.current.visible = show
       let y = TOP_Y, glowA = .6
       if (ph === 'crown') { y = TOP_Y + 2.2 + Math.sin(t * 2) * 0.12; glowA = .8 + Math.sin(t * 4) * .2 }

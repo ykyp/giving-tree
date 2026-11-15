@@ -29,7 +29,7 @@ export default function Overlay({ brand }) {
   const rang = useRef(false)
   useEffect(() => { const ring = () => { if (rang.current || useStore.getState().clock.phase === 'advent') return; rang.current = true; ensure(); bells() }; window.addEventListener('pointerdown', ring); return () => window.removeEventListener('pointerdown', ring) }, [])
 
-  const tapAction = { arrival: () => s.setPhase('dark'), dark: () => s.setPhase('lighting'), gift: () => { s.tryOpen(); s.setPhase('unwrap') }, crown: () => s.setPhase('crowning'), mearrive: () => s.setPhase(s.afterArrive(s)) }[phase]
+  const tapAction = { arrival: () => s.setPhase(s.afterArrival()), dark: () => s.setPhase('lighting'), gift: () => { s.tryOpen(); s.setPhase('unwrap') }, crown: () => s.setPhase('crowning'), mearrive: () => s.setPhase(s.afterArrive(s)) }[phase]
   const prompt = { dark: 'Tap to light the tree', gift: s.thanksFrom ? `Tap to open ${s.from}'s thank-you` : `Tap to open ${s.from}'s gift`, crown: 'Tap the star to put it on top' }[phase]
   const onTap = () => { ensure(); tapAction?.() }
 
