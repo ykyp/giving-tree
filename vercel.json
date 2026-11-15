@@ -26,6 +26,10 @@
       "destination": "/app.html"
     },
     {
+      "source": "/ops",
+      "destination": "/app.html"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/index?p=sitemap"
     },
@@ -37,6 +41,19 @@
   "headers": [
     {
       "source": "/(me|w)/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
+      ]
+    },
+    {
+      "source": "/ops",
       "headers": [
         {
           "key": "X-Robots-Tag",

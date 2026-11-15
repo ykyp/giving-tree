@@ -49,7 +49,7 @@ export const copy = {
   treeInvite: ({ name }) => `Hang your ornament on ${name}, our tree on the Giving Tree. Add your wish, and open everyone else's 🎄`,
   /** When the wishes open, in the visitor's own days. */
   opens: ({ days }) => days > 1 ? `opens in ${days} days` : days === 1 ? 'opens tomorrow' : 'open now',
-  calendar: ({ url }) => ({ summary: 'Open your Christmas wishes 🎁', description: `Your wishes are waiting on the Giving Tree: ${url}` }),
+  calendar: ({ url }) => ({ summary: 'Open your Christmas wishes 🎁', description: `Your wishes are waiting under your ornament on the Giving Tree. This is your key: ${url}` }),
   reminderEmail: ({ url }) => ({ subject: 'Open your Christmas wishes 🎁', text: `Your wishes are ready on the Giving Tree: ${url}\n\nThis is the one email we said we'd send.` }),
 }
 /** Words that must never reach a visitor of a wishes-only tree. */

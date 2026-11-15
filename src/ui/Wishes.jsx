@@ -10,6 +10,7 @@ import { WISH_MAX } from '../../shared/moderation.js'
 import { YEAR } from '../../shared/season.js'
 import { daysToChristmas } from '../../shared/season.js'
 import ShareRow from './ShareRow'
+import { calendarLinks } from '../../shared/calendar.js'
 
 const FORM_ERRORS = { bad_name: "That name can't be used. Try your first name.", already: "You've already left a wish here.", own_card: "This is your own ornament. Ask someone else to leave you a wish.", bad_wish: 'Keep it to 140 characters.', frozen: 'The tree has closed for this year.', slow_down: 'Slow down a little and try again shortly.' }
 const formError = e => FORM_ERRORS[e.code] || "That didn't send. Check your connection and try again."
@@ -194,7 +195,8 @@ export function WishTo() {
 
 /** Your key: the private link that finds your ornament and its wishes again. None of the ways to keep it needs an account. */
 export function SaveLink({ brand, onClose }) {
-  const s = useStore(), c = s.mine, url = `${location.origin}/me/${c.token}`, [email, setEmail] = useState(''), [news, setNews] = useState(false), [err, setErr] = useState(''), [saved, setSaved] = useState(!!s.me?.reminded)
+  const s = useStore(), c = s.mine, url = `${location.origin}/me/${c.token}`, [email, setEmail] = useState(''), [news, setNews] = useState(false), [err, setErr] = useState(''), [saved, setSaved] = useState(!!s.me?.reminded), [cal, setCal] = useState(false), links = calendarLinks(url)
+  const added = () => track('saved_calendar', s.tree.slug)
   const self = async () => { track('saved_selfsend', s.tree.slug); const text = `My key to the Giving Tree. My wishes open on Christmas morning 🎁 ${url}`
     try { if (navigator.share) { await navigator.share({ title: 'My key to the Giving Tree', text }); return } } catch (e) { return } window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener') }
   const remind = async e => { e.preventDefault(); try { await post(`me/${c.token}/reminder`, { email, news }); setSaved(true) } catch (x) { setErr(x.code === 'bad_email' ? "That doesn't look like an email address." : "That didn't save. Try again.") } }
@@ -204,7 +206,13 @@ export function SaveLink({ brand, onClose }) {
         <button type="button" className="x" aria-label="Close" onClick={onClose}>×</button>
         <h3>Keep your key</h3>
         <p className="sub">Your key is a private link to your ornament. It is how you come back on 25 December to open your wishes.</p>
-        <button type="button" className="btn primary" onClick={() => { track('saved_calendar', s.tree.slug); addToCalendar(c.token) }}>Add to my calendar</button>
+        {cal ? <div className="cals" role="group" aria-label="Which calendar?">
+            <a className="btn ghost" href={links.google} target="_blank" rel="noopener noreferrer" onClick={added}>Google Calendar</a>
+            <button type="button" className="btn ghost" onClick={() => { added(); addToCalendar(c.token) }}>Apple Calendar</button>
+            <a className="btn ghost" href={links.outlook} target="_blank" rel="noopener noreferrer" onClick={added}>Outlook</a>
+            <p className="fine">It adds 25 December, 9 in the morning, with your key in the notes.</p>
+          </div>
+          : <button type="button" className="btn primary" onClick={() => setCal(true)}>Add to my calendar</button>}
         <button type="button" className="btn ghost" onClick={self}>Send it to myself</button>
         {api.info.email && (saved ? <p className="note">We'll email you once, on 25 December, with your key.</p> :
           <form className="remind" onSubmit={remind}>
