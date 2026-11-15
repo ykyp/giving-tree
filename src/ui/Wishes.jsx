@@ -52,14 +52,14 @@ function WishForm({ title, sub, placeholder, skip, onSkip, submit, to, from, ask
 
 export function SealSelf() {
   // straight after hanging, or later from your own ornament's page
-  const s = useStore(), next = () => { const st = useStore.getState(); if (st.view === 'me') st.setPhase(st.myHome()); else st.setPhase('crown') }
+  const s = useStore(), next = () => { const st = useStore.getState(); if (st.view === 'me') st.setPhase(st.myHome()); else st.setPhase(st.afterOrnament()) }
   return <WishForm title="Add your wish" sub="It goes in the box under your ornament. Everyone who visits the tree can open it." placeholder="What do you wish for this Christmas?" skip={s.view === 'me' ? 'Back' : 'Skip'} onSkip={next} submit={t => s.sealSelf(t)} to="everyone" from={s.myName} sealedLine="It's in the box under your ornament." onDone={next} action="Add my wish" />
 }
 export function WishFor() {
   // signed with this phone's ornament if it has one (or the one being hung right now); otherwise the form asks
   const s = useStore(), late = s.clock.phase !== 'advent', me = s.mine?.name || (s.view === 'send' ? s.myName : '')
   // wished before hanging: back to the friend's ornament, which now offers to hang yours
-  const next = () => { const st = useStore.getState(); if (st.view !== 'open') st.setPhase('crown'); else if (st.mine) st.openMe(st.mine.token); else st.setPhase('meet') }
+  const next = () => { const st = useStore.getState(); if (st.view !== 'open') st.setPhase(st.afterOrnament()); else if (st.mine) st.openMe(st.mine.token); else st.setPhase('meet') }
   return <WishForm title={`A wish back for ${s.from}`} sub={late ? `Private: only ${s.from} can read it.` : `Private: only ${s.from} can read it, on Christmas morning.`} placeholder={`What do you wish for ${s.from}?`} skip="Not now" onSkip={next} submit={s.sealFriend} to={s.from} from={me} askName={!me}
     sealedLine={late ? "It's on its way to them." : `Sealed. Only ${s.from} can read it, on 25 December.`} onDone={next} />
 }

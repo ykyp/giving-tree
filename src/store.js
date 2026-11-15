@@ -12,6 +12,10 @@ const saveMine = (c, treeName) => lsSet('gt3-mine', JSON.stringify({ ...allMine(
 export const pendingSent = slug => { try { const p = JSON.parse(sessionStorage.getItem('gt-sent') || 'null'); return p && p.tree === slug ? p : null } catch (e) { return null } }
 const forgetMine = slug => { const all = allMine(); delete all[slug]; lsSet('gt3-mine', JSON.stringify(all)) }
 export const mineFor = slug => allMine()[slug] || null
+/** What this phone has already done on each tree: lit it, put the star on. Those moments happen once per tree. */
+const allDone = () => { try { return JSON.parse(lsGet('gt3-done') || '{}') } catch (e) { return {} } }
+const doneOn = slug => { const d = allDone()[slug] || {}, has = !!mineFor(slug); return { lit: !!d.lit || has, starred: !!d.star || has } } // an ornament here means both were done
+const markDone = (slug, key) => { const all = allDone(); all[slug] = { ...all[slug], [key]: 1 }; lsSet('gt3-done', JSON.stringify(all)) }
 
 export const GLOBAL = { slug: 'global', name: 'The Giving Tree', kind: 'global', giving: null }
 let demoDate = lsGet('gt-demo-date') || '', ticking = null, polling = null, polls = 0
@@ -42,11 +46,19 @@ export const useStore = create((set, get) => ({
   apiInfo: null, unreachable: false, clock: clockOf(clockNow()), demoDate,
   mine: null, cardP: null, parent: null, thanksFrom: null, me: null, parcels: [], wishOpen: null, branchName: null,
   // wishing: the ornaments on this tree this phone has wished, the one being wished now, and the name last signed with
+  lit: false, starred: false, // this phone has already lit this tree / put its star on
   wished: [], wishTo: null, treeShare: false, reading: null, // reading: { id, name, text } the ornament's wish being read
   wisher: lsGet('gt3-wisher') || '', made: null,
   branchView: null, // { hook, owner?, kids } the branch shown on the tree (no owner: the hero ornament is the owner)
 
-  setPhase: phase => set({ phase, phaseAt: now() }),
+  setPhase: phase => { const slug = get().tree.slug
+    if (phase === 'lighting') { markDone(slug, 'lit'); set({ lit: true }) }
+    if (phase === 'crowning') { markDone(slug, 'star'); set({ starred: true }) }
+    set({ phase, phaseAt: now() }) },
+  /** After the walk in: straight to the point if this phone has lit this tree before. */
+  afterArrival: () => { const s = get(); return !s.lit ? 'dark' : s.view === 'send' ? 'choose' : 'gift' },
+  /** Once the ornament and its wish are done: the star, unless this phone has already put it on this tree. */
+  afterOrnament: () => get().starred ? 'greeting' : 'crown',
   restart: (view = get().view) => set(s => ({ view, phase: view === 'tree' || view === 'keepsake' ? 'explore' : 'arrival', phaseAt: now(), run: s.run + 1, heroHook: -1, openResult: null, focus: null, poi: null, exploreMode: view === 'keepsake' ? 'orbit' : 'walk',
     engraveTimes: [], myName: view === 'send' ? '' : s.myName, design: view === 'open' ? (s.parent ? s.parent.design : hashStr(s.from.toLowerCase()) % 8) : s.design,
     parent: view === 'open' ? s.parent : null, branchView: view === 'open' ? s.branchView : null, cardP: null, me: null, parcels: [], wishOpen: null, branchName: null, mine: mineFor(s.tree.slug) })),
@@ -84,7 +96,7 @@ export const useStore = create((set, get) => ({
       if (e.code !== 'no_tree' || slug === 'global') throw e
       get().toastMsg("We couldn't find that tree, so here's the Giving Tree."); t = await apiGet('tree/global')
     }
-    set(s => ({ tree: t.tree, counts: t.counts, ornaments: t.ornaments, cursor: t.cursor, treeRev: s.treeRev + 1, mine: mineFor(t.tree.slug), wished: t.wished || [] }))
+    set(s => ({ tree: t.tree, counts: t.counts, ornaments: t.ornaments, cursor: t.cursor, treeRev: s.treeRev + 1, mine: mineFor(t.tree.slug), wished: t.wished || [], ...doneOn(t.tree.slug) }))
     return t.tree
   },
   /** Arriving at a tree. A phone that already has a branch here goes to it; after New Year everyone gets the keepsake. */
@@ -178,7 +190,7 @@ export const useStore = create((set, get) => ({
   setDemoDate: v => { demoDate = v; lsSet('gt-demo-date', v); api.clockIso = v ? new Date(v).toISOString() : null; set({ demoDate: v }); get().tickClock(); const s = get()
     if (s.view === 'me' && s.mine) return get().openMe(s.mine.token); if (s.clock.phase === 'keepsake') return get().restart('keepsake'); if (s.view === 'keepsake') get().restart('send'); else get().restart() },
   openDemo: async name => { const s = get(); const { id } = await apiPost('demo/card', { tree: s.tree.slug, name, design: hashStr(name.toLowerCase()) % 8, hook: 24 }); get().openCard(id, { preview: true }) },
-  resetDevice: () => { newDeviceId(); lsSet('gt3-mine', '{}'); set({ myName: '', mine: null }); get().toastMsg('This phone is reset: it is a new visitor.'); get().openTree(get().tree.slug) },
+  resetDevice: () => { newDeviceId(); lsSet('gt3-mine', '{}'); lsSet('gt3-done', '{}'); set({ myName: '', mine: null }); get().toastMsg('This phone is reset: it is a new visitor.'); get().openTree(get().tree.slug) },
   demoFriend: async (name, text) => { const s = get(); if (!s.mine) return get().toastMsg('Hang your ornament first.')
     await apiPost('demo/friend', { to: s.mine.id, name, design: Math.floor(Math.random() * 8), hook: s.mine.hook + 1, text })
     get().toastMsg(`${name} hung an ornament and left a wish`); if (s.view === 'me') get().openMe(s.mine.token) },
