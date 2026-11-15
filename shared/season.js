@@ -14,6 +14,9 @@ export const localDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
 /** Whole days from the visitor's own calendar day to 25 December. 0 on and after the day. */
 export const daysToChristmas = d => Math.max(0, Math.round((Date.UTC(YEAR, 11, 25) - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5))
 
+/** The same, from a calendar day written YYYY-MM-DD (the page's clock keeps the day that way). */
+export const daysFromDay = day => { const [y, m, d] = day.split('-').map(Number); return daysToChristmas(new Date(y, m - 1, d)) }
+
 /** A wish opens when the server has passed the earliest time zone and the reader's own clock says it is the 25th. */
 export const isReleased = (utcMs, day) => utcMs >= RELEASE_UTC && day >= SEALED_DAY
 

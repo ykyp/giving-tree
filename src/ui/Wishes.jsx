@@ -8,7 +8,7 @@ import { api, get, post, track, addToCalendar } from '../lib/api'
 import { uploadCardPreview, PREVIEW_W, PREVIEW_H } from '../lib/preview'
 import { WISH_MAX } from '../../shared/moderation.js'
 import { YEAR } from '../../shared/season.js'
-import { daysToChristmas } from '../../shared/season.js'
+import { daysFromDay } from '../../shared/season.js'
 import ShareRow from './ShareRow'
 import { calendarLinks } from '../../shared/calendar.js'
 
@@ -23,7 +23,7 @@ const previewWords = (s, thanks) => thanks
   : { title: s.myName, line: s.clock.phase === 'advent' ? 'hung an ornament. Open the wish inside.' : 'hung an ornament. Open the wish inside.' }
 const firstWord = v => v.replace(/[^\p{L}' -]/gu, '').replace(/\s.*/, '').slice(0, 12)
 /** Days to Christmas by the page's clock (which the test panel can move). */
-const daysLeft = s => { const [y, m, d] = s.clock.day.split('-').map(Number); return daysToChristmas(new Date(y, m - 1, d)) }
+const daysLeft = s => daysFromDay(s.clock.day)
 const Share = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></svg>
 
 /** A wrapped parcel in the page. `open` unties the ribbon and lifts the lid. */
@@ -112,7 +112,8 @@ export function Greeting({ brand }) {
   const closeShare = () => { setShare(false); if (!asked.current) { asked.current = true; setSave(true) } }
   return (<>
     <div className="finale on">
-      <div className="greet"><div className="hc">{s.clock.phase === 'nye' ? 'Happy New Year' : 'Happy Christmas'}</div><div className="nm">from {s.myName}</div></div>
+      {/* before the 25th the square counts down; the greeting waits for the day */}
+      <div className="greet"><div className="hc">{s.clock.phase === 'nye' ? 'Happy New Year' : s.clock.phase === 'advent' ? words.countdown({ days: daysLeft(s) }) : 'Happy Christmas'}</div><div className="nm">{s.clock.phase === 'advent' ? `${s.myName}'s ornament is up` : `from ${s.myName}`}</div></div>
       <div className="foot">
         <p className="note">{words.greetingNote({ giving: s.tree.giving, own: s.tree.kind === 'community' })}</p>
         <NextSteps onAsk={() => withCard(() => setShare(true))} onWalk={walk} onKey={() => { asked.current = true; withCard(() => setSave(true)) }} />

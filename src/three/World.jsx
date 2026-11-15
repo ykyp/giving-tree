@@ -5,6 +5,8 @@ import { RoundedBoxGeometry } from 'three-stdlib'
 import { useStore } from '../store'
 import { seeded, now } from '../lib/util'
 import { litLevel, glow } from './shared'
+import { copy } from '../../shared/copy.js'
+import { daysFromDay } from '../../shared/season.js'
 import { LAYOUT, STALLS, RINK, CAROUSEL, POSTBOX, CHURCH, SNOWMEN, SLEIGH, SQUARE_R } from './village'
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z)
@@ -234,11 +236,15 @@ export function Village({ brand }) {
 
   const [fontsIn, setFontsIn] = useState(0)
   useEffect(() => { document.fonts?.load('112px "Great Vibes"').then(() => setFontsIn(1)).catch(() => {}) }, [])
+  // the banner over the arch counts the days down, and only says Merry Christmas once it is
+  const day = useStore(s => s.clock.day), season = useStore(s => s.clock.phase)
+  const bannerText = season === 'advent' ? copy.countdown({ days: daysFromDay(day) }) : season === 'nye' ? 'Happy New Year' : 'Merry Christmas'
   const banner = useMemo(() => canvasTex(1024, 192, (x, w, h) => {
     x.fillStyle = '#7d1020'; x.fillRect(0, 0, w, h); x.strokeStyle = '#e8c46a'; x.lineWidth = 8; x.strokeRect(10, 10, w - 20, h - 20)
     x.fillStyle = '#ffe3ad'; x.textAlign = 'center'; x.textBaseline = 'middle'
-    x.font = '112px "Great Vibes", cursive'; x.fillText('Merry Christmas', w / 2, h / 2 + 8)
-  }), [fontsIn])
+    let size = 112; do { x.font = `${size}px "Great Vibes", cursive`; size -= 4 } while (x.measureText(bannerText).width > w - 90 && size > 48)
+    x.fillText(bannerText, w / 2, h / 2 + 8)
+  }), [fontsIn, bannerText])
   const archCurve = useMemo(() => new THREE.QuadraticBezierCurve3(V(-4.6, 6, 21), V(0, 8.6, 21), V(4.6, 6, 21)), [])
   const archLights = useMemo(() => { const pts = archCurve.getPoints(40); const g = new THREE.BufferGeometry().setFromPoints(pts.map(p => p.clone().add(V(0, .05, .3)))); return g }, [archCurve])
   const smoke = useRef()
