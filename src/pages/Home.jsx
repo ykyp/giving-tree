@@ -1,16 +1,17 @@
 // The front door: your ornaments if this phone has any, and three ways in. Plain HTML first; the same words are in
 // the page before this script runs (shared/shell.js), so it reads the same to people and search engines.
 import { useEffect, useState } from 'react'
-import { bootApi, post, myBranches } from '../lib/api'
+import { bootApi, get, post, myBranches } from '../lib/api'
 import { copy, SITE } from '../../shared/copy.js'
-import { LEDE, WAYS, FINE } from '../../shared/shell.js'
+import { LEDE, WAYS, FINE, STEPS, ICONS, HERO_ALT } from '../../shared/shell.js'
 import { DESIGN_META } from '../config'
 import ShareRow from '../ui/ShareRow'
-import { clockOf } from '../../shared/season.js'
+import { clockOf, daysToChristmas, YEAR } from '../../shared/season.js'
 import { WISH_MAX } from '../../shared/moderation.js'
 
 const ERRORS = { bad_name: "That name can't be used. Try a first name, or a plain name for the tree.", bad_wish: 'Write a wish of up to 140 characters.', slow_down: 'Slow down a little and try again shortly.', frozen: 'The tree has closed for this year.', no_tree: "We couldn't find that tree." }
 const say = e => ERRORS[e.code] || "That didn't work. Check your connection and try again."
+const Icon = ({ k }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS[k]} /></svg>
 const firstWord = v => v.replace(/[^\p{L}' -]/gu, '').replace(/\s.*/, '').slice(0, 12)
 
 function StartTree({ onBack }) {
@@ -75,22 +76,41 @@ function SendWish({ branches, onBack }) {
 export default function Home() {
   const [mode, setMode] = useState(() => new URLSearchParams(location.search).get('start')), [ready, setReady] = useState(null), branches = myBranches()
   const closed = clockOf(new Date()).phase === 'keepsake'
-  useEffect(() => { bootApi().then(i => setReady(!!i.ok)) }, [])
-  const pick = m => e => { e.preventDefault(); history.replaceState(null, '', m ? `/?start=${m}` : '/'); setMode(m) }
-  if (!closed && ready && mode === 'tree') return <main className="pre home"><StartTree onBack={pick(null)} /></main>
-  if (!closed && ready && mode === 'wish') return <main className="pre home"><SendWish branches={branches} onBack={pick(null)} /></main>
+  // how many ornaments are really on the shared tree, once the server has said
+  const [count, setCount] = useState(0)
+  useEffect(() => { bootApi().then(i => { setReady(!!i.ok); if (i.ok) get('tree/global').then(t => setCount(t.counts.ornaments)).catch(() => {}) }) }, [])
+  const pick = m => e => { e.preventDefault(); history.replaceState(null, '', m ? `/?start=${m}` : '/'); setMode(m); window.scrollTo(0, 0) }
+  if (!closed && ready && mode === 'tree') return <main className="pre home formpage"><StartTree onBack={pick(null)} /></main>
+  if (!closed && ready && mode === 'wish') return <main className="pre home formpage"><SendWish branches={branches} onBack={pick(null)} /></main>
+  const days = daysToChristmas(new Date()), on = clockOf(new Date()).phase
+  const eyebrow = closed ? `Christmas ${YEAR}` : on === 'advent' ? (days === 1 ? 'Christmas is tomorrow' : `${days} days to Christmas`) : 'Happy Christmas'
+  const year = new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)
   return (
-    <main className="pre home">
-      <h1>{SITE}</h1>
-      <p className="lede">{closed ? 'The tree is resting until next December. Everything that was hung this year is still here to look at.' : LEDE}</p>
-      {branches.length > 0 && <section className="mine" aria-label="Your ornaments"><h2>Your ornaments</h2>
-        {branches.map(b => <a key={b.tree} className="way mine-way" href={`/me/${b.token}`}><b>{b.name}'s ornament</b><span>on {b.treeName || (b.tree === 'global' ? SITE : 'your tree')}</span></a>)}</section>}
-      {closed ? <nav className="ways" aria-label="Look back"><a className="way" href="/t/global"><b>The {new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)} Giving Tree</b><span>Every name that was hung on the shared tree.</span></a></nav>
-        : <nav className="ways" aria-label="Ways to begin">
-          {WAYS.map(w => <a key={w.href} className="way" href={w.href} onClick={w.mode ? pick(w.mode) : undefined}><b>{w.title}</b><span>{w.text}</span></a>)}
-        </nav>}
-      {ready === false && <p className="err" role="alert">The tree can't be reached just now. Please try again in a moment.</p>}
-      <p className="fine">{FINE}</p>
+    <main className="landing">
+      <header className="hero">
+        <picture><img className="hero-img" src="/hero.jpg" alt={HERO_ALT} width="1920" height="1157" fetchpriority="high" /></picture>
+        <div className="snow" aria-hidden="true" />
+        <div className="hero-top">
+          <p className="eyebrow">{eyebrow}{count > 0 && ` · ${count.toLocaleString('en-GB')} ${count === 1 ? 'ornament' : 'ornaments'} so far`}</p>
+          <h1>{SITE}</h1>
+          <p className="lede">{closed ? 'The tree is resting until next December. Everything that was hung this year is still here to look at.' : LEDE}</p>
+        </div>
+        <nav className="dock" aria-label={closed ? 'Look back' : 'Ways to begin'}>
+          {branches.map(b => <a key={b.tree} className="glass return" href={`/me/${b.token}`}><Icon k="ornament" /><span><small>Welcome back, {b.name}</small>Open your ornament on {b.treeName || (b.tree === 'global' ? SITE : 'your tree')}</span><Icon k="arrow" /></a>)}
+          {closed ? <a className="cta" href="/t/global"><Icon k="tree" /><span>See the {year} Giving Tree</span></a> : <>
+            <a className="cta" href={WAYS[0].href}><Icon k="ornament" /><span>{branches.some(b => b.tree === 'global') ? 'Visit the Giving Tree' : WAYS[0].short}</span></a>
+            <div className="dock-row">{WAYS.slice(1).map(w => <a key={w.href} className="glass" href={w.href} onClick={pick(w.mode)}><Icon k={w.icon} /><span>{w.short}</span></a>)}</div>
+          </>}
+          {ready === false && <p className="err" role="alert">The tree can't be reached just now. Please try again in a moment.</p>}
+        </nav>
+      </header>
+      {!closed && <>
+        <section className="band" aria-labelledby="how"><h2 id="how">How it works</h2>
+          <ol className="steps">{STEPS.map((st, i) => <li key={st.title} className="step"><span className="num">{i + 1}</span><Icon k={st.icon} /><h3>{st.title}</h3><p>{st.text}</p></li>)}</ol></section>
+        <section className="band" aria-labelledby="ways"><h2 id="ways">Three ways to begin</h2>
+          <div className="paths">{WAYS.map(w => <a key={w.href} className="path" href={w.href} onClick={w.mode ? pick(w.mode) : undefined}><Icon k={w.icon} /><h3>{w.title}</h3><p>{w.text}</p><span className="go">{w.short} <Icon k="arrow" /></span></a>)}</div></section>
+      </>}
+      <footer className="foot-note"><p>{FINE}</p></footer>
     </main>
   )
 }
