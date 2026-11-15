@@ -57,6 +57,7 @@ async function operator(headers) {
 
 // Nothing here can fake the date or the device: those tools exist only on the local dev server.
 const env = {
+  opsAuth: supabaseUrl && publicKey ? { url: supabaseUrl, key: publicKey } : null,
   emailEnabled: process.env.EMAIL_REMINDERS === 'on' && !!(resendKey && process.env.EMAIL_FROM), sendEmail, notify, operator,
   cronSecret: process.env.CRON_SECRET, origin: process.env.PUBLIC_ORIGIN,
   hashDevice: async id => createHash('sha256').update(salt + id).digest('hex'), // only a salted hash of the device cookie is stored

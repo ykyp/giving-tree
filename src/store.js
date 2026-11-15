@@ -14,7 +14,7 @@ const forgetMine = slug => { const all = allMine(); delete all[slug]; lsSet('gt3
 export const mineFor = slug => allMine()[slug] || null
 
 export const GLOBAL = { slug: 'global', name: 'The Giving Tree', kind: 'global', giving: null }
-let demoDate = lsGet('gt-demo-date') || '', ticking = null, polling = null
+let demoDate = lsGet('gt-demo-date') || '', ticking = null, polling = null, polls = 0
 const clockNow = () => demoDate ? new Date(demoDate) : new Date()
 const today = () => localDay(clockNow())
 const wrapUp = () => 'explore'
@@ -100,10 +100,12 @@ export const useStore = create((set, get) => ({
   /** New ornaments hung by other people, while the tree is on screen. */
   pollTree: async () => {
     const s = get(); if (s.unreachable || !s.apiInfo || document.hidden || !WATCHING.has(s.phase)) return
-    let t; try { t = await apiGet(`tree/${s.tree.slug}?since=${s.cursor}`) } catch (e) { return }
+    // every fourth time the whole list comes back, so a wish added after its ornament was hung still reaches people looking
+    const whole = ++polls % 4 === 0
+    let t; try { t = await apiGet(`tree/${s.tree.slug}?since=${whole ? 0 : s.cursor}`) } catch (e) { return }
     if (get().tree.slug !== t.tree.slug) return
     const known = new Set(get().ornaments.map(o => o.id)), fresh = t.ornaments.filter(o => !known.has(o.id))
-    set(st => ({ tree: t.tree, counts: t.counts, cursor: t.cursor, ornaments: [...fresh, ...st.ornaments].slice(0, 200), arrivals: fresh.filter(o => o.id !== st.mine?.id), tick: st.tick + 1, wished: t.wished || st.wished }))
+    set(st => ({ tree: t.tree, counts: t.counts, cursor: t.cursor, ornaments: [...fresh, ...(whole ? st.ornaments.map(o => { const n = t.ornaments.find(x => x.id === o.id); return n && n.wish !== o.wish ? { ...o, wish: n.wish } : o }) : st.ornaments)].slice(0, 200), arrivals: fresh.filter(o => o.id !== st.mine?.id), tick: st.tick + 1, wished: t.wished || st.wished }))
   },
 
   /** Someone arrives on a card link. */

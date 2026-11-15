@@ -5,6 +5,7 @@ import { WISH_MAX, BRANCH_MAX, flagWish, badName } from '../shared/moderation.js
 import { copy } from '../shared/copy.js'
 import { page, pages, sitemap } from '../shared/shell.js'
 import { treeSlug } from '../shared/slug.js'
+import { icsFile } from '../shared/calendar.js'
 import { givingComplete } from './repo-memory.js'
 
 const BOT = /bot\b|bot\/|crawl|spider|facebookexternalhit|whatsapp|slack|telegram|discord|linkedin|skypeuripreview|preview/i
@@ -58,18 +59,15 @@ async function storeWish(repo, card, { from, text, kind, device }, t) {
 }
 const branchView = async (repo, card) => { const b = await repo.getBranch(card.id); return { name: card.branchName || null, kids: b.kids.map(pub), opened: b.opened, gifts: b.gifts } }
 
-function icsFor(card, origin) {
-  const fold = l => { const out = []; while (l.length > 73) { out.push(l.slice(0, 73)); l = ' ' + l.slice(73) } out.push(l); return out.join('\r\n') }
-  const url = `${origin}/me/${card.token}`, c = copy.calendar({ url })
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//The Giving Tree//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${card.id}@giving-tree`, `DTSTAMP:${YEAR}1101T000000Z`,
-    `DTSTART:${YEAR}1225T090000`, `DTEND:${YEAR}1225T093000`, `SUMMARY:${c.summary}`, `DESCRIPTION:${c.description}`, `URL:${url}`, 'END:VEVENT', 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n'
-}
+const icsFor = (card, origin) => icsFile({ uid: card.id, url: `${origin}/me/${card.token}` })
 
 async function route(req, repo, env, ctx) {
   const { method, query = {}, body = {}, headers = {} } = req, { t, device, origin } = ctx
   const parts = req.path.replace(/^\/+|\/+$/g, '').split('/'), [a, b1, b2, b3] = parts
   const GET = method === 'GET', POST = method === 'POST'
 
+  // what the team's sign-in page needs to ask Supabase for an email link: public values only
+  if (GET && a === 'ops' && b1 === 'config') return { auth: env.opsAuth || null }
   if (GET && a === 'health') return { ok: true, email: !!env.emailEnabled, testMode: !!env.testMode }
 
   // ---- trees ----
@@ -119,7 +117,7 @@ async function route(req, repo, env, ctx) {
     return { sealed: true } // never echoes the words, and never says whether it was flagged
   }
 
-  if (GET && a === 'ics') { const c = await cardByToken(repo, b1); return { type: 'text/calendar; charset=utf-8', text: icsFor(c, origin), headers: { 'content-disposition': 'attachment; filename="christmas-wishes.ics"' } } }
+  if (GET && a === 'ics') { const c = await cardByToken(repo, b1); return { type: 'text/calendar; charset=utf-8', text: icsFor(c, origin), headers: { 'content-disposition': 'inline; filename="christmas-wishes.ics"', 'cache-control': 'no-store' } } }
   // ---- page addresses: one document for people and search engines alike (specs/003, contracts/pages.md) ----
   if (GET && a === 'page') {
     const html = (p, cache) => ({ type: 'text/html; charset=utf-8', text: page(p, origin), status: p.status, headers: { 'cache-control': cache || 'no-store', ...(p.noindex ? { 'x-robots-tag': 'noindex' } : {}) } })
@@ -135,7 +133,7 @@ async function route(req, repo, env, ctx) {
     if (b1 === 'w') { const w = await repo.getSentWish(String(b2 || '')); if (!w || w.status === 'rejected') return html(pages.missing('wish')); return html(pages.sent({ sent: w, tree: treeView(await repo.getTree(w.tree)) })) }
     return html(pages.missing('page'))
   }
-  if (GET && a === 'robots') return { type: 'text/plain; charset=utf-8', text: `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /me/\nDisallow: /w/\n\nSitemap: ${origin}/sitemap.xml\n`, headers: { 'cache-control': 'public, s-maxage=3600' } }
+  if (GET && a === 'robots') return { type: 'text/plain; charset=utf-8', text: `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /me/\nDisallow: /w/\nDisallow: /ops\n\nSitemap: ${origin}/sitemap.xml\n`, headers: { 'cache-control': 'public, s-maxage=3600' } }
   if (GET && a === 'sitemap') return { type: 'application/xml; charset=utf-8', text: sitemap(origin), headers: { 'cache-control': 'public, s-maxage=3600' } }
 
   // ---- trees people create ----
@@ -270,7 +268,8 @@ async function route(req, repo, env, ctx) {
     }
     if (POST && b1 === 'trees' && b3 === 'takedown') { if (!await repo.takeDownTree(String(b2), t)) throw fail(404, 'no_tree'); return { ok: true } }
     if (GET && b1 === 'measures') { const tr = await treeBySlug(repo, query.tree, true); return { ...(await repo.measures(tr.slug, RELEASE_UTC)), counts: await repo.counts(tr.slug) } }
-    if (GET && b1 === 'review') return { wishes: await repo.reviewQueue() }
+    if (GET && b1 === 'review') return { wishes: await Promise.all((await repo.reviewQueue()).map(async w => { const c = await repo.getCard(w.to), tr = c && await repo.getTree(c.tree)
+      return { id: w.id, text: w.text, from: w.from, kind: w.kind, at: w.at, reported: !!w.reported, to: w.to, toName: c?.name || null, tree: c?.tree || null, treeName: tr?.name || null } })) }
     if (POST && b1 === 'review') { if (body.action !== 'approve' && body.action !== 'reject') throw fail(400, 'bad_action'); const status = await repo.decideWish(b2, body.action === 'approve' ? 'ok' : 'rejected'); if (!status) throw fail(404, 'no_wish'); return { status } }
     if (POST && b1 === 'cards' && b3 === 'hide') { const h = await repo.hideCard(b2, body.hidden !== false); if (h === null) throw fail(404, 'no_card'); return { moderation: h ? 'hidden' : 'ok' } }
     if (POST && b1 === 'cards' && b3 === 'remove') { if (!await repo.removeCard(b2, String(body.note || '').slice(0, 200), t)) throw fail(404, 'no_card'); return { ok: true } }

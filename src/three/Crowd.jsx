@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { seeded, hashStr, now, easeOut } from '../lib/util'
 import { shared } from './shared'
 import { chime } from '../lib/audio'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { DESIGNS, crowdMats, tagMatAtlas, tagGeo, capGeo, capMat, cellUV, drawCell, TAG_DESIGNS, mosaicColors, mosaicGeo } from './ornamentKit'
 
 /* ---------- rope physics (verlet): a rope only pulls when it is taut ---------- */
@@ -89,6 +90,16 @@ export function addLive(brand, o) {
   paint(brand, orn); crowd.list.push(orn); crowd.dirty = true; return orn
 }
 
+/* ---------- the box under an ornament: its owner's wish, for anyone to open ---------- */
+const BOX = .13
+const boxGeo = new THREE.BoxGeometry(BOX, BOX, BOX)
+const ribbonGeo = mergeGeometries([new THREE.BoxGeometry(BOX + .012, BOX + .012, .028), new THREE.BoxGeometry(.028, BOX + .012, BOX + .012), new THREE.TorusGeometry(.028, .009, 6, 12).translate(-.026, BOX / 2 + .03, 0), new THREE.TorusGeometry(.028, .009, 6, 12).translate(.026, BOX / 2 + .03, 0)])
+const boxMat = new THREE.MeshStandardMaterial({ roughness: .45, envMapIntensity: .8 }), ribbonMat = new THREE.MeshStandardMaterial({ color: 0xe8c46a, metalness: .7, roughness: .25 })
+/** How far below its cap each kind of ornament ends, so the box hangs just under it. */
+const BOTTOM = DESIGNS.map(d => { d.geo.computeBoundingBox(); return d.top - d.geo.boundingBox.min.y })
+const BOX_COLORS = ['#b3202f', '#1f6b4a', '#27408b', '#8a2f6a', '#c0562a'].map(c => new THREE.Color(c))
+const boxM = new THREE.Matrix4(), boxT = new THREE.Matrix4()
+
 const M = { cap: new THREE.Matrix4(), body: new THREE.Matrix4(), tag: new THREE.Matrix4(), t: new THREE.Matrix4(), r: new THREE.Matrix4(), s: new THREE.Matrix4() }
 const Q = new THREE.Quaternion(), DOWN = new THREE.Vector3(0, -1, 0), C = new THREE.Vector3(), D = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1)
 /** Shared by crowd and hero: compute cap/body/tag matrices for an ornament hanging from A. */
@@ -116,13 +127,17 @@ export default function Crowd({ brand }) {
     const m = new THREE.InstancedMesh(geo, crowdMats[i], MAXO); m.count = 0; m.frustumCulled = false; m.userData.list = []; return m }), [])
   const tags = useMemo(() => { const g = tagGeo.clone(); g.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(MAXO * 4), 4)); const m = new THREE.InstancedMesh(g, tagMatAtlas, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
   const caps = useMemo(() => { const m = new THREE.InstancedMesh(capGeo, capMat, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
+  const boxes = useMemo(() => { const m = new THREE.InstancedMesh(boxGeo, boxMat, MAXO); m.count = 0; m.frustumCulled = false; m.userData.list = []; return m }, [])
+  const ribbons = useMemo(() => { const m = new THREE.InstancedMesh(ribbonGeo, ribbonMat, MAXO); m.count = 0; m.frustumCulled = false; return m }, [])
   const threads = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXO * 6), 3)); const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xcaa65a, transparent: true, opacity: .8 })); l.frustumCulled = false; return l }, [])
 
-  const branchView = useStore(s => s.branchView), treeRev = useStore(s => s.treeRev), mineId = useStore(s => s.mine?.id), arrivals = useStore(s => s.arrivals)
+  const branchView = useStore(s => s.branchView), treeRev = useStore(s => s.treeRev), mineId = useStore(s => s.mine?.id), arrivals = useStore(s => s.arrivals), ornaments = useStore(s => s.ornaments)
   useEffect(() => { mosaicColors(brand.accent); meshes[3].geometry.setAttribute('color', mosaicGeo.attributes.color) }, [brand, meshes])
   // the tree shows what the server says is on it, plus the branch in view
   useEffect(() => { const st = useStore.getState(); populate(brand, st.ornaments); applyBranch(brand, st.branchView) }, [brand, meshes, treeRev, branchView, mineId])
   useEffect(() => { const st = useStore.getState(); for (const o of arrivals) if (addLive(brand, o) && (st.phase === 'explore' || st.phase === 'greeting')) { st.toastMsg(`${o.name} just hung an ornament`); chime([1568], 0, .04) } }, [arrivals])
+  // which ornaments have a wish in their box: follows the server's list, so a wish added later gets its box
+  useEffect(() => { const has = new Set(ornaments.filter(o => o.wish).map(o => o.id)); for (const o of crowd.list) { const w = has.has(o.cid); if (w !== !!o.wish) { o.wish = w; crowd.dirty = true } } }, [ornaments, treeRev, branchView, mineId, arrivals])
 
   function rebuild() {
     meshes.forEach(m => m.userData.list = [])
@@ -130,6 +145,10 @@ export default function Crowd({ brand }) {
     crowd.list.forEach(o => { const m = meshes[o.design]; o.k = m.userData.list.length; m.userData.list.push(o); if (TAG_DESIGNS.has(o.design)) { o.tk = tl.length; tl.push(o) } })
     meshes.forEach((m, i) => { if (DESIGNS[i].atlas) { const a = m.geometry.attributes.aCell; m.userData.list.forEach((o, k) => a.array.set(cellUV(o.cell), k * 4)); a.needsUpdate = true } m.count = m.userData.list.length })
     const ta = tags.geometry.attributes.aCell; tl.forEach((o, k) => ta.array.set(cellUV(o.cell), k * 4)); ta.needsUpdate = true; tags.count = tl.length
+    const bl = boxes.userData.list = crowd.list.filter(o => o.wish); bl.forEach((o, k) => { o.bk = k; boxes.setColorAt(k, BOX_COLORS[hashStr(String(o.cid)) % BOX_COLORS.length]) })
+    boxes.count = ribbons.count = bl.length; if (boxes.instanceColor) boxes.instanceColor.needsUpdate = true
+    // three keeps one sphere round all instances for taps, worked out once: forget it whenever the set changes
+    boxes.boundingSphere = null; meshes.forEach(m => { m.boundingSphere = null })
     caps.count = crowd.list.length; threads.geometry.setDrawRange(0, crowd.list.length * 2); crowd.dirty = false
   }
 
@@ -144,11 +163,13 @@ export default function Crowd({ brand }) {
       const scale = o.dropAt ? Math.min(1, (t - o.dropAt) / 0.25 + 0.2) : 1
       const c = hangMatrices(o, A, t, o.design, scale)
       meshes[o.design].setMatrixAt(o.k, M.body); caps.setMatrixAt(i, M.cap); if (TAG_DESIGNS.has(o.design)) tags.setMatrixAt(o.tk, M.tag)
+      if (o.wish) { boxM.copy(M.cap).multiply(boxT.makeTranslation(0, -(BOTTOM[o.design] + BOX / 2 + .035), 0)).multiply(M.r.makeRotationY(o.ph)); boxes.setMatrixAt(o.bk, boxM); ribbons.setMatrixAt(o.bk, boxM) }
       tp[i * 6] = A.x; tp[i * 6 + 1] = A.y; tp[i * 6 + 2] = A.z; tp[i * 6 + 3] = c.x; tp[i * 6 + 4] = c.y; tp[i * 6 + 5] = c.z
       if (!o.wp) o.wp = new THREE.Vector3(); o.wp.setFromMatrixPosition(M.body)
       world.push(o)
     })
     shared.crowdWorld = world
+    boxes.instanceMatrix.needsUpdate = true; ribbons.instanceMatrix.needsUpdate = true
     meshes.forEach(m => m.instanceMatrix.needsUpdate = true); tags.instanceMatrix.needsUpdate = true; caps.instanceMatrix.needsUpdate = true; threads.geometry.attributes.position.needsUpdate = true
   })
 
@@ -156,8 +177,15 @@ export default function Crowd({ brand }) {
     const st = useStore.getState(); if (st.phase !== 'explore' || e.delta > 8) return
     e.stopPropagation(); const o = mesh.userData.list[e.instanceId]; if (o) useStore.setState({ focus: o.id })
   }
+  // tapping a box opens the wish inside it
+  const openBox = e => {
+    const st = useStore.getState(); if (st.phase !== 'explore' || e.delta > 8) return
+    e.stopPropagation(); const o = boxes.userData.list[e.instanceId], card = o && st.ornaments.find(x => x.id === o.cid)
+    if (card?.wish) useStore.setState({ focus: o.id, reading: { id: card.id, name: card.name, text: card.wish } })
+  }
   return (
     <group>
+      <primitive object={boxes} onClick={openBox} /><primitive object={ribbons} />
       {meshes.map((m, i) => <primitive key={i} object={m} onClick={e => onClick(e, m)} />)}
       <primitive object={tags} /><primitive object={caps} /><primitive object={threads} />
     </group>
