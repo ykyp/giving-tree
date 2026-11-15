@@ -6,7 +6,7 @@ import { ago } from '../lib/util'
 import { copy as words, money } from '../../shared/copy.js'
 import { ensure, setSound, chime, bells } from '../lib/audio'
 import { post } from '../lib/api'
-import { Greeting, Meet, SealSelf, WishFor, WishTo, TreeSheet, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
+import { Greeting, Meet, SealSelf, WishFor, WishTo, ReadWish, TreeSheet, Home, Parcels, Gave, Thanks, SelfCoda, Keepsake } from './Wishes'
 import { shared } from '../three/shared'
 import { crowd } from '../three/Crowd'
 import { PoiLabels, Minimap, PoiCard } from './WalkHUD'
@@ -69,6 +69,7 @@ export default function Overlay({ brand }) {
       {phase === 'selfwish' && <SelfCoda />}
       {phase === 'explore' && (view === 'keepsake' ? <Keepsake brand={brand} /> : <Explore brand={brand} />)}
       {s.treeShare && <TreeSheet onClose={() => useStore.setState({ treeShare: false })} />}
+      {s.reading && <ReadWish />}
       {s.wishTo && <WishTo />}
       <Labels />
       <Toast />
@@ -137,6 +138,9 @@ function Explore({ brand }) {
   // on a tree for your own people, any ornament can be wished from its name card
   const canWish = o => s.tree.kind === 'community' && s.clock.phase !== 'keepsake' && !o.you && o.cid && o.cid !== s.mine?.id
   const fo = s.focus == null ? null : s.focus === 'hero' ? { name: s.view === 'open' ? s.from : s.myName, design: s.design, mins: 0, you: true } : crowd.list.find(o => o.id === s.focus)
+  // the wish in the box under the ornament in view: someone else's, the card being visited, or your own
+  const foWish = !fo ? null : !fo.you ? (w => w && { id: fo.cid, name: fo.name, text: w })(s.ornaments.find(o => o.id === fo.cid)?.wish)
+    : s.view === 'open' ? s.parent?.wish && { id: s.parent.id, name: s.from, text: s.parent.wish } : (p => p?.text && s.mine && { id: s.mine.id, name: s.myName, text: p.text })(s.parcels.find(p => p.kind === 'self'))
   const g = s.tree.giving, pct = g ? Math.min(100, g.given / g.cap * 100) : 0, empty = s.counts.ornaments === 0
   const rows = s.ornaments.slice(0, 8).map(o => ({ n: o.name, when: ago(Math.max(0, Math.round((Date.now() - o.at) / 60000))) }))
   return (<>
@@ -147,7 +151,8 @@ function Explore({ brand }) {
     {s.heroHook >= 0 && s.view !== 'tree' && !fo && !s.poi && <button type="button" className="btn ghost findme" onClick={() => useStore.setState({ focus: 'hero' })}>Find my ornament</button>}
     {!fo && <PoiCard brand={brand} onOwn={startOwn} bottom={s.view === 'tree' ? 108 : 16} />}
     {fo && <div className="fcard"><div className="who"><b>{fo.name}</b><span>{DESIGN_META[fo.design].label} · {fo.you ? (s.view === 'open' ? 'just now' : 'your ornament') : `hung ${ago(fo.mins)}`}</span></div>
-      {canWish(fo) && (s.wished.includes(fo.cid) ? <span className="done">Wished ✓</span> : <button type="button" className="btn primary" onClick={() => useStore.setState({ wishTo: { id: fo.cid, name: fo.name } })}>Leave a wish</button>)}
+      {foWish ? <button type="button" className="btn primary" onClick={() => { ensure(); useStore.setState({ reading: foWish }) }}>Open wish</button>
+        : canWish(fo) && (s.wished.includes(fo.cid) ? <span className="done">Wished ✓</span> : <button type="button" className="btn primary" onClick={() => useStore.setState({ wishTo: { id: fo.cid, name: fo.name } })}>Wish back</button>)}
       <button type="button" className="x" aria-label="Close" onClick={() => useStore.setState({ focus: null })}>×</button></div>}
     {s.view === 'tree' && !fo && <div className={'sheet' + (open ? '' : ' peek')}>
       <button type="button" className="grab" aria-expanded={open} onClick={() => setOpen(!open)}><span className="t1">{s.tree.name}</span><span className="t2">{empty ? 'Be the first to hang an ornament' : words.treeLine({ giving: g, counts: s.counts })} · {open ? 'tap to close' : 'tap for details'}</span></button>

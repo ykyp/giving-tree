@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { bootApi, post, myBranches } from '../lib/api'
 import { copy, SITE } from '../../shared/copy.js'
-import { LEDE, WAYS } from '../../shared/shell.js'
+import { LEDE, WAYS, FINE } from '../../shared/shell.js'
 import { DESIGN_META } from '../config'
 import ShareRow from '../ui/ShareRow'
 import { clockOf } from '../../shared/season.js'
@@ -20,7 +20,7 @@ function StartTree({ onBack }) {
   return (
     <form className="card-form" onSubmit={go}>
       <h2>Start a tree for your people</h2>
-      <p className="sub">Name it after the people it's for. You hang the first ornament and get a link to share. Everyone on the tree can leave each other a wish.</p>
+      <p className="sub">Name it after the people it's for. You hang the first ornament and get a link to share. Everyone adds a wish and can open each other's.</p>
       <label htmlFor="treeName">The tree's name</label>
       <input id="treeName" className="field" autoFocus value={name} maxLength={40} placeholder="The Georgiou family" autoComplete="off" onChange={e => { setErr(''); setName(e.target.value) }} />
       <p className="err" role="alert">{err}</p>
@@ -90,7 +90,7 @@ export default function Home() {
           {WAYS.map(w => <a key={w.href} className="way" href={w.href} onClick={w.mode ? pick(w.mode) : undefined}><b>{w.title}</b><span>{w.text}</span></a>)}
         </nav>}
       {ready === false && <p className="err" role="alert">The tree can't be reached just now. Please try again in a moment.</p>}
-      <p className="fine">No accounts and no passwords. First names only. Wishes are private to the person they were written for, and are deleted on 1 February 2027.</p>
+      <p className="fine">{FINE}</p>
     </main>
   )
 }

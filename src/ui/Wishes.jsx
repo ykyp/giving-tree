@@ -19,7 +19,7 @@ const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
 /** The two lines on a card's picture. */
 const previewWords = (s, thanks) => thanks
   ? { title: s.branchName || s.myName, line: (() => { const n = (s.me?.branch.kids || []).map(k => k.name); return n.length ? `Thank you, ${n.slice(0, 4).join(', ')}${n.length > 4 ? ' and everyone' : ''}` : 'Thank you' })() }
-  : { title: s.myName, line: s.clock.phase === 'advent' ? 'hung an ornament. Leave a wish for Christmas.' : 'hung an ornament. Leave a wish.' }
+  : { title: s.myName, line: s.clock.phase === 'advent' ? 'hung an ornament. Open the wish inside.' : 'hung an ornament. Open the wish inside.' }
 const firstWord = v => v.replace(/[^\p{L}' -]/gu, '').replace(/\s.*/, '').slice(0, 12)
 /** Days to Christmas by the page's clock (which the test panel can move). */
 const daysLeft = s => { const [y, m, d] = s.clock.day.split('-').map(Number); return daysToChristmas(new Date(y, m - 1, d)) }
@@ -30,7 +30,7 @@ function Pk({ open, small }) { return <span className={'pk' + (open ? ' open' : 
 
 /* ---------- writing a wish ---------- */
 /** `askName`: this phone has no ornament here, so the wish is signed with a first name typed in the form. */
-function WishForm({ title, sub, placeholder, skip, onSkip, submit, to, from, askName, sealedLine, onDone }) {
+function WishForm({ title, sub, placeholder, skip, onSkip, submit, to, from, askName, sealedLine, onDone, action = 'Seal it' }) {
   const [text, setText] = useState(''), [name, setName] = useState(() => useStore.getState().wisher), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [sent, setSent] = useState(false), ref = useRef(), nameRef = useRef()
   useEffect(() => { const t = setTimeout(() => (askName && !name ? nameRef : ref).current?.focus(), 700); return () => clearTimeout(t) }, [])
   const signed = askName ? name.trim() : from
@@ -44,21 +44,22 @@ function WishForm({ title, sub, placeholder, skip, onSkip, submit, to, from, ask
       <label className="vh" htmlFor="wishIn">{title}</label>
       <textarea id="wishIn" ref={ref} rows={3} value={text} maxLength={WISH_MAX} placeholder={placeholder} onChange={e => { setErr(''); setText(e.target.value) }} />
       <div className="wf-meta"><span className="err" role="alert">{err}</span><span className="count">{text.length}/{WISH_MAX}</span></div>
-      <div className="btnrow"><button type="button" className="btn ghost" onClick={onSkip}>{skip}</button><button type="submit" className="btn primary" disabled={!text.trim() || !signed || busy}>Seal it</button></div>
+      <div className="btnrow"><button type="button" className="btn ghost" onClick={onSkip}>{skip}</button><button type="submit" className="btn primary" disabled={!text.trim() || !signed || busy}>{action}</button></div>
     </form>
   )
 }
 
 export function SealSelf() {
-  const s = useStore(), next = () => useStore.getState().setPhase('crown')
-  return <WishForm title="Seal a wish for yourself" sub="It opens on Christmas morning." placeholder="What do you hope for next year?" skip="Skip" onSkip={next} submit={s.sealSelf} to="You" sealedLine="Sealed until Christmas morning." onDone={next} />
+  // straight after hanging, or later from your own ornament's page
+  const s = useStore(), next = () => { const st = useStore.getState(); if (st.view === 'me') st.setPhase(st.myHome()); else st.setPhase('crown') }
+  return <WishForm title="Add your wish" sub="It goes in the box under your ornament. Everyone who visits the tree can open it." placeholder="What do you wish for this Christmas?" skip={s.view === 'me' ? 'Back' : 'Skip'} onSkip={next} submit={t => s.sealSelf(t)} to="everyone" from={s.myName} sealedLine="It's in the box under your ornament." onDone={next} action="Add my wish" />
 }
 export function WishFor() {
   // signed with this phone's ornament if it has one (or the one being hung right now); otherwise the form asks
   const s = useStore(), late = s.clock.phase !== 'advent', me = s.mine?.name || (s.view === 'send' ? s.myName : '')
   // wished before hanging: back to the friend's ornament, which now offers to hang yours
   const next = () => { const st = useStore.getState(); if (st.view !== 'open') st.setPhase('crown'); else if (st.mine) st.openMe(st.mine.token); else st.setPhase('meet') }
-  return <WishForm title={`Leave ${s.from} a wish`} sub={late ? 'They can open it straight away.' : 'It stays sealed until Christmas morning.'} placeholder={`What do you wish for ${s.from}?`} skip="Not now" onSkip={next} submit={s.sealFriend} to={s.from} from={me} askName={!me}
+  return <WishForm title={`A wish back for ${s.from}`} sub={late ? `Private: only ${s.from} can read it.` : `Private: only ${s.from} can read it, on Christmas morning.`} placeholder={`What do you wish for ${s.from}?`} skip="Not now" onSkip={next} submit={s.sealFriend} to={s.from} from={me} askName={!me}
     sealedLine={late ? "It's on its way to them." : `Sealed. Only ${s.from} can read it, on 25 December.`} onDone={next} />
 }
 
@@ -75,14 +76,13 @@ export function Meet({ brand }) {
       <div className="greet"><div className="hc small">{s.thanksFrom ? `Thank you from ${s.from}` : `${s.from}'s ornament`}</div></div>
       <div className="foot">
         {line && <div className={'gift' + (line.given ? '' : ' muted')}><span className="tile" /><p>{line.text}</p></div>}
-        {p.own ? <><p className="note">This is what the people you ask will see.</p>{mine}</>
-          // the wish is left: now the ornament
-          : p.left ? <><p className="note">{late ? `You've left ${s.from} a wish.` : `Your wish for ${s.from} is sealed until Christmas morning.`}{!s.mine && ` Now hang yours next to ${s.from}'s, so they can send one back.`}</p>
-            {mine || <button type="button" className="btn primary" onClick={s.beginOwn}>Hang my ornament</button>}</>
-          // the wish comes first: it is what they were asked for
-          : <><p className="note">{late ? `${s.from} would love a wish from you.` : `${s.from} would love a wish from you. It stays wrapped until Christmas morning.`}{waitingLine}</p>
-            <button type="button" className="btn primary" onClick={() => s.setPhase('wishfor')}>Leave {s.from} a wish</button>
-            {!s.mine && <button type="button" className="btn text" onClick={s.beginOwn}>Hang my ornament first</button>}</>}
+        {p.wish && <blockquote className="quote" style={{ fontFamily: handFor(s.from) }}>{p.wish}<cite>{s.from}</cite></blockquote>}
+        {p.own ? <><p className="note">This is what your friends will see.</p>{mine}</>
+          : <>{!p.wish && <p className="note">{s.from} hasn't added a wish yet.</p>}
+            {/* first their own ornament and wish; a wish back is the smaller choice, and stays wrapped */}
+            {mine || <button type="button" className="btn primary" onClick={s.beginOwn}>Hang my ornament</button>}
+            {p.left ? <p className="note">{late ? `You've left ${s.from} a wish back.` : `Your wish back for ${s.from} is wrapped until Christmas morning.`}</p>
+              : <button type="button" className="btn ghost" onClick={() => s.setPhase('wishfor')}>Leave {s.from} a wish back</button>}</>}
       </div>
     </div>
   )
@@ -95,7 +95,7 @@ function NextSteps({ onAsk, onKey, onWalk }) {
   return (<>
     {own ? <><button type="button" className="btn primary" onClick={() => useStore.setState({ treeShare: true })}><Share />Invite people to this tree</button>
       {others && <button type="button" className="btn ghost" onClick={() => setPeople(true)}>Wish someone on this tree</button>}</>
-      : <button type="button" className="btn primary" onClick={onAsk}><Share />Ask friends for a wish</button>}
+      : <button type="button" className="btn primary" onClick={onAsk}><Share />Share my ornament</button>}
     <div className="btnrow"><button type="button" className="btn ghost" onClick={onWalk}>Walk around</button><button type="button" className="btn ghost" onClick={onKey}>Keep my key</button></div>
     {people && <People onClose={() => setPeople(false)} />}
   </>)
@@ -130,11 +130,11 @@ export function ShareSheet({ kind, brand, onClose }) {
   // the picture a chat app will show for this link: drawn here so they see it, and sent to the server
   useEffect(() => { if (cv.current) uploadCardPreview(c.token, kind, previewWords(s, thanks), cv.current) }, [])
   return (
-    <div className="sheetmodal" role="dialog" aria-label={thanks ? 'Send your thank-you card' : 'Ask friends for a wish'}>
+    <div className="sheetmodal" role="dialog" aria-label={thanks ? 'Send your thank-you card' : 'Share your ornament'}>
       <div className="sm-in">
         <button type="button" className="x" aria-label="Close" onClick={onClose}>×</button>
-        <h3>{thanks ? (nye ? 'Happy New Year' : 'Your thank-you card') : 'Ask for a wish'}</h3>
-        <p className="sub">{thanks ? 'One card for everyone who left you a wish, or send it to the group.' : 'This is what your friends will see. They leave you a wish, then hang their own.'}</p>
+        <h3>{thanks ? (nye ? 'Happy New Year' : 'Your thank-you card') : 'Share your ornament'}</h3>
+        <p className="sub">{thanks ? 'One card for everyone who left you a wish, or send it to the group.' : 'This is what your friends will see. They open your wish, hang their own, and can leave you one back.'}</p>
         <div className="chat"><div className="bubble">
           <div className="prev"><canvas ref={cv} width={PREVIEW_W} height={PREVIEW_H} /><div className="pt"><b>{words.previewTitle({ name: s.myName, branchName: s.branchName, thanks })}</b><span>{words.previewText({ giving, thanks, waiting, given, late })}</span><em>{location.host}</em></div></div>
           <div className="msg">{text} <span className="u">{link}</span></div><div className="time">✓✓</div>
@@ -170,9 +170,10 @@ export function People({ onClose }) {
       <div className="sm-in">
         <button type="button" className="x" aria-label="Close" onClick={onClose}>×</button>
         <h3>Wish someone</h3>
-        <p className="sub">{list.length ? (late ? 'They can open it straight away.' : 'Each wish stays wrapped under their ornament until Christmas morning.') : 'Nobody else has hung an ornament here yet.'}</p>
+        <p className="sub">{list.length ? (late ? 'Open their wish, or leave them one.' : 'Open their wish, or leave them one back. Yours stays wrapped until Christmas morning.') : 'Nobody else has hung an ornament here yet.'}</p>
         <ul className="people">{list.map(o => <li key={o.id}><span>{o.name}</span>
-          {s.wished.includes(o.id) ? <em>Wished ✓</em> : <button type="button" className="btn ghost" aria-label={`Leave ${o.name} a wish`} onClick={() => useStore.setState({ wishTo: { id: o.id, name: o.name } })}>Leave a wish</button>}</li>)}</ul>
+          {o.wish && <button type="button" className="btn text" aria-label={`Open ${o.name}'s wish`} onClick={() => useStore.setState({ reading: { id: o.id, name: o.name, text: o.wish } })}>Open wish</button>}
+          {s.wished.includes(o.id) ? <em>Wished ✓</em> : <button type="button" className="btn ghost" aria-label={`Leave ${o.name} a wish back`} onClick={() => useStore.setState({ wishTo: { id: o.id, name: o.name } })}>Wish back</button>}</li>)}</ul>
       </div>
     </div>
   )
@@ -184,7 +185,7 @@ export function WishTo() {
   return (
     <div className="sheetmodal" role="dialog" aria-label={`Leave ${w.name} a wish`}>
       <div className="sm-in">
-        <WishForm title={`Leave ${w.name} a wish`} sub={late ? 'They can open it straight away.' : 'It stays sealed until Christmas morning.'} placeholder={`What do you wish for ${w.name}?`} skip="Cancel" onSkip={close}
+        <WishForm title={`A wish back for ${w.name}`} sub={late ? `Private: only ${w.name} can read it.` : `Private: only ${w.name} can read it, on Christmas morning.`} placeholder={`What do you wish for ${w.name}?`} skip="Cancel" onSkip={close}
           submit={(text, from) => s.sealTo(w.id, text, from)} to={w.name} from={me} askName={!me} sealedLine={late ? "It's on its way to them." : `Sealed. Only ${w.name} can read it, on 25 December.`} onDone={close} />
       </div>
     </div>
@@ -222,13 +223,15 @@ const Tags = ({ list }) => <div className="tags">{list.map(p => <span key={p.id}
 
 /** Coming back before Christmas: the parcels pile up, but nothing opens. */
 export function Home({ brand }) {
-  const s = useStore(), [share, setShare] = useState(false), [save, setSave] = useState(false), friends = s.parcels.filter(p => p.kind === 'friend'), beside = s.me.branch.kids.length
+  const s = useStore(), [share, setShare] = useState(false), [save, setSave] = useState(false), friends = s.parcels.filter(p => p.kind === 'friend'), beside = s.me.branch.kids.length, own = s.parcels.find(p => p.kind === 'self')
   return (<>
     <div className="finale on">
       <div className="greet"><div className="hc small">{s.myName}'s ornament</div></div>
       <div className="foot">
-        {s.parcels.length > 0 && <Tags list={s.parcels} />}
-        <p className="waiting">{friends.length ? plural(friends.length, 'wish', 'wishes') + ' waiting' : 'No wishes yet'} · {words.opens({ days: daysLeft(s) })}</p>
+        {own ? <blockquote className="quote" style={{ fontFamily: handFor(s.myName) }}>{own.text}<cite>your wish, in the box under your ornament</cite></blockquote>
+          : s.clock.phase !== 'keepsake' && <button type="button" className="btn text" onClick={() => s.setPhase('seal')}>Add your wish to your ornament</button>}
+        {friends.length > 0 && <Tags list={friends} />}
+        <p className="waiting">{friends.length ? `${plural(friends.length, 'wish', 'wishes')} for you` : 'No wishes for you yet'} · {words.opens({ days: daysLeft(s) })}</p>
         {beside > 0 && <p className="note">{beside === 1 ? `${s.me.branch.kids[0].name} hung theirs next to yours.` : `${beside} people hung theirs next to yours.`}</p>}
         <NextSteps onAsk={() => setShare(true)} onWalk={() => s.setPhase('explore')} onKey={() => setSave(true)} />
       </div>
@@ -236,6 +239,27 @@ export function Home({ brand }) {
     {share && <ShareSheet kind="invite" brand={brand} onClose={() => setShare(false)} />}
     {save && <SaveLink brand={brand} onClose={() => setSave(false)} />}
   </>)
+}
+
+/** The wish on someone's ornament, out of its box. Anyone can read it; anyone can report it. */
+export function ReadWish() {
+  const s = useStore(), r = s.reading, mine = r.id === s.mine?.id, [confirm, setConfirm] = useState(false), close = () => useStore.setState({ reading: null })
+  useEffect(() => { chime([1046.5, 1318.5, 1568], .1, .09) }, [r.id])
+  const canBack = !mine && s.tree.kind === 'community' && !s.wished.includes(r.id) && s.clock.phase !== 'keepsake'
+  return (
+    <div className="wishmodal" role="dialog" aria-label={mine ? 'Your wish' : `${r.name}'s wish`}>
+      <Pk open />
+      <div className="paper">
+        <p className="w-text" style={{ fontFamily: handFor(r.name) }}>{r.text}</p>
+        <p className="w-from" style={{ fontFamily: handFor(r.name) }}>{r.name}</p>
+      </div>
+      <div className="w-actions">
+        <button type="button" className="btn primary" onClick={close}>Close</button>
+        {canBack && <button type="button" className="btn ghost" onClick={() => useStore.setState({ reading: null, wishTo: { id: r.id, name: r.name } })}>Leave {r.name} a wish back</button>}
+        {!mine && (confirm ? <button type="button" className="btn text" onClick={() => s.reportOpenWish(r.id)}>Yes, report this wish</button> : <button type="button" className="btn text" onClick={() => setConfirm(true)}>Report</button>)}
+      </div>
+    </div>
+  )
 }
 
 /* ---------- Christmas morning ---------- */

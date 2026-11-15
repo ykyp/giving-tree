@@ -6,7 +6,8 @@ import { chime, whoosh, bells } from '../lib/audio'
 import { FLY_DUR } from './CameraRig'
 
 // Moves the story on between beats that don't need a tap, plays the beat sounds, and drops in live gifts.
-const afterHang = s => s.view !== 'send' ? 'crown' : s.parent ? (s.parent.left || s.parent.own ? 'crown' : 'wishfor') : s.clock.phase === 'advent' ? 'seal' : 'crown'
+// once the ornament is on the tree, its owner is asked for the wish that goes in its box
+const afterHang = s => s.view === 'send' ? 'seal' : 'crown'
 const AUTO = { arrival: [FLY_DUR, s => 'dark'], lighting: [4.6, s => s.view === 'send' ? 'choose' : 'gift'], unwrap: [2.7, () => 'meet'], settling: [2.8, afterHang], crowning: [6.4, () => 'greeting'], mearrive: [5, s => s.afterArrive(s)] }
 export default function Director() {
   useEffect(() => useStore.subscribe((s, p) => {
