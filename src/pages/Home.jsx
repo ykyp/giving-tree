@@ -83,7 +83,7 @@ export default function Home() {
   if (!closed && ready && mode === 'tree') return <main className="pre home formpage"><StartTree onBack={pick(null)} /></main>
   if (!closed && ready && mode === 'wish') return <main className="pre home formpage"><SendWish branches={branches} onBack={pick(null)} /></main>
   const days = daysToChristmas(new Date()), on = clockOf(new Date()).phase
-  const eyebrow = closed ? `Christmas ${YEAR}` : on === 'advent' ? (days === 1 ? 'Christmas is tomorrow' : `${days} days to Christmas`) : 'Happy Christmas'
+  const eyebrow = closed ? `Christmas ${YEAR}` : on === 'advent' ? copy.countdown({ days }) : on === 'nye' ? 'Happy New Year' : 'Happy Christmas'
   const year = new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)
   return (
     <main className="landing">

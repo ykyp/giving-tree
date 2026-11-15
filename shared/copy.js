@@ -47,6 +47,8 @@ export const copy = {
   sentMessage: ({ to, late }) => `${to}, I made you an ornament on the Giving Tree, with a wish under it. Hang it to keep the wish${late ? '' : ' and open it on Christmas morning'} 🎁`,
   /** The message that goes with the link of a tree made for a group. */
   treeInvite: ({ name }) => `Hang your ornament on ${name}, our tree on the Giving Tree. Add your wish, and open everyone else's 🎄`,
+  /** What the square says before Christmas, instead of a greeting that would be early. */
+  countdown: ({ days }) => days > 1 ? `${days} days to Christmas` : days === 1 ? 'Christmas is tomorrow' : 'Merry Christmas',
   /** When the wishes open, in the visitor's own days. */
   opens: ({ days }) => days > 1 ? `opens in ${days} days` : days === 1 ? 'opens tomorrow' : 'open now',
   calendar: ({ url }) => ({ summary: 'Open your Christmas wishes 🎁', description: `Your wishes are waiting under your ornament on the Giving Tree. This is your key: ${url}` }),
