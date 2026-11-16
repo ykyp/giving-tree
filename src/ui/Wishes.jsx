@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { hashStr } from '../lib/util'
 import { copy, money } from '../../shared/copy.js'
 const words = { ...copy, money }
 import { chime, ensure } from '../lib/audio'
 import { api, get, post, track, addToCalendar } from '../lib/api'
-import { uploadCardPreview, PREVIEW_W, PREVIEW_H } from '../lib/preview'
+import { uploadCardPreview, storyFile, PREVIEW_W, PREVIEW_H } from '../lib/preview'
 import { WISH_MAX } from '../../shared/moderation.js'
 import { YEAR } from '../../shared/season.js'
 import { daysFromDay } from '../../shared/season.js'
@@ -131,6 +131,9 @@ export function ShareSheet({ kind, brand, onClose }) {
   const text = thanks ? words.thanks({ giving, given, nye }) : words.invite({ late })
   // the picture a chat app will show for this link: drawn here so they see it, and sent to the server
   useEffect(() => { if (cv.current) uploadCardPreview(c.token, kind, previewWords(s, thanks), cv.current) }, [])
+  // the 9:16 picture for a story, made as the sheet opens so it is ready the moment the button is tapped
+  const story = useMemo(() => storyFile({ name: thanks ? (s.branchName || s.myName) : s.myName, wish: thanks ? '' : s.parcels.find(p => p.kind === 'self')?.text || '', tree: s.tree.name,
+    top: late ? '' : words.countdown({ days: daysLeft(s) }), ask: thanks ? 'Thank you for your wishes' : 'Open my wish and hang yours next to mine', host: link.replace(/^https?:\/\//, '') }), [])
   return (
     <div className="sheetmodal" role="dialog" aria-label={thanks ? 'Send your thank-you card' : 'Share your ornament'}>
       <div className="sm-in">
@@ -141,7 +144,7 @@ export function ShareSheet({ kind, brand, onClose }) {
           <div className="prev"><canvas ref={cv} width={PREVIEW_W} height={PREVIEW_H} /><div className="pt"><b>{words.previewTitle({ name: s.myName, branchName: s.branchName, thanks })}</b><span>{words.previewText({ giving, thanks, waiting, given, late })}</span><em>{location.host}</em></div></div>
           <div className="msg">{text} <span className="u">{link}</span></div><div className="time">✓✓</div>
         </div></div>
-        <ShareRow text={text} link={link} onShare={() => track(thanks ? 'share_v2' : 'share_v1', s.tree.slug)} />
+        <ShareRow text={text} link={link} story={story} onShare={() => track(thanks ? 'share_v2' : 'share_v1', s.tree.slug)} />
         {!thanks && <button type="button" className="btn text" onClick={() => s.openCard(c.id, { preview: true })}>See what they'll see →</button>}
       </div>
     </div>

@@ -374,3 +374,6 @@ body:has(.landing){padding:0}
 .scene-msg.soft{background:rgba(7,11,28,.82);backdrop-filter:blur(6px)}
 .perf{position:absolute;left:8px;top:8px;z-index:40;margin:0;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.62);color:#b9f5c8;font:11px/1.35 ui-monospace,Menlo,monospace;pointer-events:none;white-space:pre}
 @media (prefers-reduced-motion:reduce){.veil{transition:none}.veil .fine{animation:none}}
+
+/* the story button under the four chat apps */
+.sr-story{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}.sr-story svg{width:20px;height:20px;color:#ffe3ad}
