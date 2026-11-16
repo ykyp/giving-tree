@@ -71,6 +71,8 @@ async function route(req, repo, env, ctx) {
 
   // what the team's sign-in page needs to ask Supabase for an email link: public values only
   if (GET && a === 'ops' && b1 === 'config') return { auth: env.opsAuth || null }
+  // who runs the site, for the About page: public by nature
+  if (GET && a === 'site') return { operator: env.operator || null, contact: env.contact || null }
   if (GET && a === 'health') return { ok: true, email: !!env.emailEnabled, testMode: !!env.testMode }
 
   // ---- trees ----
@@ -124,6 +126,7 @@ async function route(req, repo, env, ctx) {
   // ---- page addresses: one document for people and search engines alike (specs/003, contracts/pages.md) ----
   if (GET && a === 'page') {
     const html = (p, cache) => ({ type: 'text/html; charset=utf-8', text: page(p, origin), status: p.status, headers: { 'cache-control': cache || 'no-store', ...(p.noindex ? { 'x-robots-tag': 'noindex' } : {}) } })
+    if (b1 === 'about') return html(pages.about({ operator: env.operator, contact: env.contact }), 'public, s-maxage=300')
     if (b1 === 't') { const tree = await repo.getTree(String(b2 || '')); if (!tree || !tree.published) return html(pages.missing('tree')); return html(pages.tree({ tree: treeView(tree), counts: await repo.counts(tree.slug) }), 'public, s-maxage=60') }
     if (b1 === 'c') {
       const c = await repo.getCard(String(b2 || '')); if (!c || c.hidden) return html(pages.missing('card'))

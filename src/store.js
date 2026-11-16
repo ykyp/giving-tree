@@ -172,6 +172,9 @@ export const useStore = create((set, get) => ({
   /** The wish on your own ornament: in its box, open to everyone who visits the tree. */
   sealSelf: async text => { const c = get().mine || await get().createCard(); const r = await apiPost(`me/${c.token}/wish`, { text }); set(s => ({ parcels: [...s.parcels.filter(p => p.kind !== 'self'), { id: r.id, from: s.myName, kind: 'self', opened: true, text }] })) },
   /** Reports the wish on someone's ornament: it comes off the tree at once. */
+  /** "Remove my ornament": it leaves the tree and its wishes are deleted. Throws if the server could not be reached. */
+  removeMine: async () => { const s = get(), slug = s.tree.slug; await apiPost(`me/${s.mine.token}/remove`); forgetMine(slug); set({ mine: null, me: null, parcels: [] })
+    try { await get().loadTree(slug) } catch (e) {} get().toastMsg('Your ornament has been removed.'); get().restart('send') },
   reportOpenWish: id => { apiPost(`card/${id}/report`).catch(() => {}); set(st => ({ reading: null, ornaments: st.ornaments.map(o => o.id === id ? { ...o, wish: null } : o), parent: st.parent?.id === id ? { ...st.parent, wish: null } : st.parent })); get().toastMsg("Thanks. We've taken it down and will review it.") },
   /** Leaves a wish under someone's ornament. `from` is the name it is signed with. */
   sealTo: async (id, text, from) => { await apiPost('wish', { to: id, from, text }); lsSet('gt3-wisher', from)

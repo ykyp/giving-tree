@@ -4,6 +4,8 @@ import { DEMO } from './lib/api'
 import { report } from './lib/health'
 import Home from './pages/Home'
 import SentWish from './pages/SentWish'
+import About from './pages/About'
+import { watchErrors } from './lib/health'
 
 // The 3D scene is big, so it only loads when someone enters a tree. The home page and a sent wish are plain pages.
 // If its script will not load (a new version went out while this tab was open, or the network dropped), reload once to
@@ -18,6 +20,7 @@ const Scene = lazy(() => import('./App').catch(e => {
 }))
 const Ops = lazy(() => import('./pages/Ops'))
 const path = location.pathname
-const Page = /^\/ops\/?$/.test(path) && !DEMO ? Ops : DEMO || /^\/(t|c|me)\//.test(path) ? Scene : /^\/w\//.test(path) ? SentWish : Home
+watchErrors()
+const Page = /^\/about\/?$/.test(path) ? About : /^\/ops\/?$/.test(path) && !DEMO ? Ops : DEMO || /^\/(t|c|me)\//.test(path) ? Scene : /^\/w\//.test(path) ? SentWish : Home
 const Loading = () => <main className="pre"><h1>The Giving Tree</h1><p className="fine">The tree is loading.</p></main>
 createRoot(document.getElementById('root')).render(<Suspense fallback={<Loading />}><Page /></Suspense>)

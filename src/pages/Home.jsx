@@ -110,7 +110,7 @@ export default function Home() {
         <section className="band" aria-labelledby="ways"><h2 id="ways">Three ways to begin</h2>
           <div className="paths">{WAYS.map(w => <a key={w.href} className="path" href={w.href} onClick={w.mode ? pick(w.mode) : undefined}><Icon k={w.icon} /><h3>{w.title}</h3><p>{w.text}</p><span className="go">{w.short} <Icon k="arrow" /></span></a>)}</div></section>
       </>}
-      <footer className="foot-note"><p>{FINE}</p></footer>
+      <footer className="foot-note"><p>{FINE}</p><p><a href="/about">About and privacy</a></p></footer>
     </main>
   )
 }
