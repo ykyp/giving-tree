@@ -263,16 +263,18 @@ export default function Hero({ brand }) {
         a.needsUpdate = true; hookPts.current.geometry.setDrawRange(0, n); hookPts.current.material.opacity = .5 + Math.sin(t * 3) * .25 } }
   })
 
-  // link-preview snapshot of the hero ornament
-  useEffect(() => { shared.snapshot = () => {
-    const cam = new THREE.PerspectiveCamera(30, 1.91, .05, 200), b = shared.heroBody
+  // A close-up of the hero ornament, drawn off screen. Wide (the default) for link previews; `tall` for a 9:16 story,
+  // where the camera stands further back so the ornament sits in the upper middle with room for words under it.
+  useEffect(() => { shared.snapshot = ({ tall = false } = {}) => {
+    const w = tall ? 1080 : 1200, ht = tall ? 1920 : 628
+    const cam = new THREE.PerspectiveCamera(tall ? 34 : 30, w / ht, .05, 200), b = shared.heroBody
     const h = useStore.getState().heroHook, n = h >= 0 ? shared.hooks[h].n : V(0, 0, 1)
     // far enough back, and aimed low enough, that the ornament sits in the upper part with room for the name under it
-    cam.position.copy(b).addScaledVector(n, 1.85).add(V(0, .03, 0)); cam.lookAt(b.clone().add(V(0, -.12, 0))); const W = gl.domElement.width, H = gl.domElement.height
-    const tmp = new THREE.WebGLRenderTarget(1200, 628, { colorSpace: THREE.SRGBColorSpace }); gl.setRenderTarget(tmp); gl.render(scene, cam)
-    const px = new Uint8Array(1200 * 628 * 4); gl.readRenderTargetPixels(tmp, 0, 0, 1200, 628, px); gl.setRenderTarget(null); tmp.dispose()
-    const c = document.createElement('canvas'); c.width = 1200; c.height = 628; const x = c.getContext('2d'), img = x.createImageData(1200, 628)
-    for (let y = 0; y < 628; y++) img.data.set(px.subarray((627 - y) * 4800, (628 - y) * 4800), y * 4800)
+    cam.position.copy(b).addScaledVector(n, tall ? 4.6 : 1.85).add(V(0, .03, 0)); cam.lookAt(b.clone().add(V(0, tall ? -.42 : -.12, 0)))
+    const tmp = new THREE.WebGLRenderTarget(w, ht, { colorSpace: THREE.SRGBColorSpace }); gl.setRenderTarget(tmp); gl.render(scene, cam)
+    const px = new Uint8Array(w * ht * 4); gl.readRenderTargetPixels(tmp, 0, 0, w, ht, px); gl.setRenderTarget(null); tmp.dispose()
+    const c = document.createElement('canvas'); c.width = w; c.height = ht; const x = c.getContext('2d'), img = x.createImageData(w, ht), row = w * 4
+    for (let y = 0; y < ht; y++) img.data.set(px.subarray((ht - 1 - y) * row, (ht - y) * row), y * row)
     x.putImageData(img, 0, 0); return c
   } }, [gl, scene])
 
