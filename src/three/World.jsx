@@ -106,9 +106,24 @@ function snowColTex(h, S, base, depth, repeat, extra) {
   x.putImageData(img, 0, 0); if (extra) extra(x, S)
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); t.anisotropy = 16; return t
 }
-export function Ground() {
-  const { snowMat, geo, trod, trodN } = useMemo(() => {
+export function Ground({ tier }) {
+  // The relief you see up close comes from the normal map; the mesh only shapes the distant drifts, so weaker devices
+  // get a coarser one (105,800 triangles at 230 segments, 51,200 at 160, 24,200 at 110).
+  const segs = tier === 'high' ? 230 : tier === 'low' ? 110 : 160
+  const geo = useMemo(() => {
     const nz = valueNoise(13)
+    // displaced terrain: flat where you walk, rising into soft drifts beyond
+    const geo = new THREE.PlaneGeometry(420, 420, segs, segs); geo.rotateX(-Math.PI / 2)
+    const pos = geo.attributes.position
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i) + 20, e = edgeDist(x, z), ramp = Math.min(1, e / 6)
+      let h = ramp * ramp * (.25 + .55 * nz(x / 9 + 30, z / 9 + 30))
+      if (e > 30) h += Math.min(1, (e - 30) / 40) * nz(x / 30, z / 30) * 3.5
+      pos.setY(i, h - .02); pos.setZ(i, z) }
+    geo.computeVertexNormals()
+    return geo
+  }, [segs])
+  useEffect(() => () => geo.dispose(), [geo])
+  const { snowMat, trod, trodN } = useMemo(() => {
     // deep snow: wind-smoothed undulation (large) + crystalline grain (fine), carried mostly by the normal map
     const S = 512
     const macro = heightField(S, 5, [[3, .6], [6, .3], [12, .1]], 0)
@@ -116,14 +131,6 @@ export function Ground() {
     const col = snowColTex(macro, S, [240, 244, 251], .07, [12, 12])
     const nrm = normalTex(fine, S, 2.2, [150, 150])
     const snowMat = sparkle(new THREE.MeshStandardMaterial({ map: col, normalMap: nrm, normalScale: new THREE.Vector2(.55, .55), roughness: .86, envMapIntensity: .3, color: 0xffffff }), .993, 1.8)
-    // displaced terrain: flat where you walk, rising into soft drifts beyond
-    const geo = new THREE.PlaneGeometry(420, 420, 230, 230); geo.rotateX(-Math.PI / 2)
-    const pos = geo.attributes.position
-    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i) + 20, e = edgeDist(x, z), ramp = Math.min(1, e / 6)
-      let h = ramp * ramp * (.25 + .55 * nz(x / 9 + 30, z / 9 + 30))
-      if (e > 30) h += Math.min(1, (e - 30) / 40) * nz(x / 30, z / 30) * 3.5
-      pos.setY(i, h - .02); pos.setZ(i, z) }
-    geo.computeVertexNormals()
     // packed snow on the paths: same white, a touch greyer, compressed into footprint trails (no bare cobbles)
     const ph = heightField(S, 23, [[4, .5], [8, .3], [24, .2]], .12)
     const fr = seeded(41)
@@ -133,7 +140,7 @@ export function Ground() {
           if (q < 1) { const ix = (((Math.round(fx) + di) % S) + S) % S, iy = (((Math.round(fy) + dj) % S) + S) % S; ph[iy * S + ix] -= .22 * (1 - q) } } } }
     const trod = snowColTex(ph, S, [226, 231, 241], .12, [1, 1])
     const trodN = normalTex(ph, S, 3, [1, 1])
-    return { snowMat, geo, trod, trodN }
+    return { snowMat, trod, trodN }
   }, [])
   // one material per surface so each gets a texture repeat matching its real size (≈5 m per tile)
   const trodMat = useMemo(() => { const mk = (rx, rz) => { const t = trod.clone(), n = trodN.clone(); t.needsUpdate = n.needsUpdate = true; t.repeat.set(rx, rz); n.repeat.set(rx, rz)

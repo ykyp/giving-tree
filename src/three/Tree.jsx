@@ -126,7 +126,7 @@ export default function Tree({ tier, brand }) {
     for (let i = 0; i < N; i++) { const t = i / N, y = TREE.base + 0.4 + t * (TREE.top - TREE.base - 0.9), rad = Rsil(y + 0.3) * 0.93 + 0.05, a = t * 6.2832 * 12 + (r() - .5) * .1
       P.set([Math.cos(a) * rad, y + Math.sin(a * 3) * .05, Math.sin(a) * rad], i * 3); C.set(pal[Math.floor(r() * pal.length)], i * 3); T[i] = t }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setAttribute('aT', new THREE.BufferAttribute(T, 1))
-    const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(.03, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), N)
+    const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(.03, tier === 'low' ? 6 : 8, tier === 'low' ? 4 : 6), new THREE.MeshBasicMaterial({ toneMapped: false }), N)
     const m4 = new THREE.Matrix4(); for (let i = 0; i < N; i++) { m4.makeTranslation(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]); bulbs.setMatrixAt(i, m4); bulbs.setColorAt(i, new THREE.Color(.08, .07, .06)) }
     bulbs.frustumCulled = false
     const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,

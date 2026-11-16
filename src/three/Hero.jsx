@@ -97,7 +97,7 @@ function GiftBox({ brand, from, visible }) {
 export default function Hero({ brand }) {
   const { gl, camera, scene, size } = useThree()
   const design = useStore(s => s.design), view = useStore(s => s.view), phase = useStore(s => s.phase), from = useStore(s => s.from), run = useStore(s => s.run)
-  const canvas = useMemo(() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 512; window.__heroCanvas = c; return c }, [])
+  const canvas = useMemo(() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 512; return c }, [])
   const tex = useMemo(() => { const t = new THREE.CanvasTexture(canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t }, [canvas])
   const parts = useMemo(() => {
     const D = DESIGNS[design], mat = D.mat(); if (D.atlas) mat.map = tex

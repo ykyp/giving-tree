@@ -13,6 +13,7 @@ const toCard = r => r && ({ id: r.id, token: r.token, tree: r.tree, name: r.name
   seq: Number(r.seq), ...(r.removed_at != null ? { removedAt: Number(r.removed_at) } : {}) })
 const toWish = r => r && ({ id: r.id, to: r.card_id, from: r.from_name, text: r.body, kind: r.kind, device: r.device, status: r.status, at: Number(r.at), opened: r.opened, reported: r.reported })
 
+const SCENE = ['no_webgl', 'gl_lost', 'gl_restored', 'scene_error', 'chunk_error', 'tier_low']
 export function postgresRepo(sql, { now = Date.now } = {}) {
   /** Wishes and emails are deleted on 1 February (a scheduled job does it; this makes sure nothing is served after). */
   const wiped = () => now() >= WIPE_AT
@@ -85,7 +86,7 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
     // ---- measures ----
     async addEvent(tree, name, at) { await sql`insert into events (tree, name, at) values (${tree}, ${name}, ${at})` },
     async markReturned(cardId) { return (await sql`insert into returned (card_id) values (${cardId}) on conflict do nothing returning card_id`).length > 0 },
-    async measures(slug, releaseAt) {
+    async measures(slug, releaseAt, now = Date.now()) {
       const [m] = await sql`select
         (select count(*) from cards where tree = ${slug})::int as cards,
         (select count(*) from wishes w join cards c on c.id = w.card_id where c.tree = ${slug} and w.kind = 'friend')::int as wishes,
@@ -93,8 +94,9 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
         (select count(*) from opens o join cards c on c.id = o.card_id where c.tree = ${slug} and o.reason is distinct from 'own' and o.at < ${releaseAt})::int as opens_v1,
         (select count(*) from opens o join cards c on c.id = o.card_id where c.tree = ${slug} and o.reason is distinct from 'own' and o.at >= ${releaseAt})::int as opens_v2,
         (select given_pence from trees where slug = ${slug}) as given`
-      const ev = Object.fromEntries((await sql`select name, count(*)::int as n from events where tree = ${slug} group by name`).map(r => [r.name, r.n]))
-      return { ...m, share_v1: ev.share_v1 || 0, share_v2: ev.share_v2 || 0, saved_calendar: ev.saved_calendar || 0, saved_selfsend: ev.saved_selfsend || 0, saved_email: ev.saved_email || 0, returns: ev.returned || 0 }
+      const rows = await sql`select name, count(*)::int as n, (count(*) filter (where at >= ${now - 864e5}))::int as day from events where tree = ${slug} group by name`, ev = Object.fromEntries(rows.map(r => [r.name, r.n])), day = Object.fromEntries(rows.map(r => [r.name, r.day]))
+      return { ...m, share_v1: ev.share_v1 || 0, share_v2: ev.share_v2 || 0, saved_calendar: ev.saved_calendar || 0, saved_selfsend: ev.saved_selfsend || 0, saved_email: ev.saved_email || 0, returns: ev.returned || 0,
+        scene: Object.fromEntries(SCENE.map(n => [n, { total: ev[n] || 0, day: day[n] || 0 }])) }
     },
 
     // ---- reminders, previews ----

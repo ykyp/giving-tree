@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { useStore } from '../store'
 import { now, clamp, easeOut } from '../lib/util'
 // Mutable, per-frame state shared between scene components (kept out of React to avoid re-renders).
-export const shared = window.__shared = {
+export const shared = {
   camera: null, gl: null, scene: null,
   hooks: [],            // [{p, n, y}] hang points on the tree
   hookHi: -1,           // hook under the dragged ornament
@@ -21,6 +21,8 @@ export function litLevel() {
   if (s.phase === 'lighting') return clamp((now() - s.phaseAt) / 4.2, 0, 1)
   return AFTER_LIGHT.has(s.phase) || s.lit ? 1 : 0 // a tree this phone has lit before is already lit when it walks in
 }
+// a handle for the test panel and for checking the scene by hand: never on the live site
+if (import.meta.env.DEV || import.meta.env.MODE === 'demo') window.__shared = shared
 export const glow = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d')
   const g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.22, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)')
   x.fillStyle = g; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c) })()
