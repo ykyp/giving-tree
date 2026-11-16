@@ -22,6 +22,10 @@
       "destination": "/api/index?p=page/w/:token"
     },
     {
+      "source": "/pic/:id/:file",
+      "destination": "/api/index?p=img/:id/:file"
+    },
+    {
       "source": "/me/:token",
       "destination": "/app.html"
     },

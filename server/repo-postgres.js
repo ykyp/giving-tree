@@ -64,7 +64,7 @@ export function postgresRepo(sql, { now = Date.now } = {}) {
     },
     async wishedOn(slug, device) { return wiped() ? [] : (await sql`select distinct w.card_id from wishes w join cards c on c.id = w.card_id where c.tree = ${slug} and w.kind = 'friend' and w.device = ${device}`).map(r => r.card_id) },
     async hasWished(cardId, device) { return !wiped() && (await sql`select 1 from wishes where card_id = ${cardId} and kind = 'friend' and device = ${device}`).length > 0 },
-    async wishesFor(cardId) { return wiped() ? [] : (await sql`select * from wishes where card_id = ${cardId} order by at, id`).map(toWish) },
+    async wishesFor(cardId) { return wiped() ? [] : (await sql`select * from wishes where card_id = ${cardId} order by at, kind desc, id`).map(toWish) },
     async getWish(id) { return wiped() ? null : toWish((await sql`select * from wishes where id = ${id}`)[0]) || null },
     async markOpened(id) { await sql`update wishes set opened = true where id = ${id}` },
     async reportWish(id) { await sql`update wishes set status = 'review', reported = true where id = ${id}` },

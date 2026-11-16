@@ -64,7 +64,8 @@ const icsFor = (card, origin) => icsFile({ uid: card.id, url: `${origin}/me/${ca
 async function route(req, repo, env, ctx) {
   const { method, query = {}, body = {}, headers = {} } = req, { t, device, origin } = ctx
   const parts = req.path.replace(/^\/+|\/+$/g, '').split('/'), [a, b1, b2, b3] = parts
-  const GET = method === 'GET', POST = method === 'POST'
+  // chat apps often ask with HEAD before they fetch a page or its picture: it is answered like GET, without the body
+  const GET = method === 'GET' || method === 'HEAD', POST = method === 'POST'
 
   // what the team's sign-in page needs to ask Supabase for an email link: public values only
   if (GET && a === 'ops' && b1 === 'config') return { auth: env.opsAuth || null }
@@ -126,7 +127,8 @@ async function route(req, repo, env, ctx) {
       const c = await repo.getCard(String(b2 || '')); if (!c || c.hidden) return html(pages.missing('card'))
       // the card's own picture (their ornament, close up) once their page has made one; the site's picture until then.
       // The address changes when the picture does, because chat apps keep pictures by address.
-      const kind = query.t == null ? 'invite' : 'thanks', pic = await repo.getPreview(c.id, kind), image = pic ? `/api/img/${c.id}/${kind}?v=${pic.length.toString(36)}${pic.slice(-6).replace(/[^\w]/g, '')}` : undefined
+      // It is a plain .jpg address outside /api (vercel.json sends /pic/… here), so robots.txt does not keep preview fetchers from it.
+      const kind = query.t == null ? 'invite' : 'thanks', pic = await repo.getPreview(c.id, kind), image = pic ? `/pic/${c.id}/${kind}-${pic.length.toString(36)}${pic.slice(-6).replace(/[^\w]/g, '')}.jpg` : undefined
       const tree = treeView(await repo.getTree(c.tree)); if (kind === 'invite') return html(pages.card({ card: c, tree, late: t >= RELEASE_UTC, image }))
       const br = await repo.getBranch(c.id); return html(pages.thanks({ card: c, tree, given: tree.giving ? br.gifts * tree.giving.perGift : 0, image }))
     }
@@ -178,7 +180,7 @@ async function route(req, repo, env, ctx) {
     }
   }
 
-  if (GET && a === 'img') { const v = await repo.getPreview(b1, b2 === 'thanks' ? 'thanks' : 'invite'); if (!v) throw fail(404, 'no_image'); return { type: 'image/jpeg', b64: v, headers: { 'cache-control': 'public, max-age=86400, immutable' } } }
+  if (GET && a === 'img') { const v = await repo.getPreview(b1, /^thanks/.test(b2 || '') ? 'thanks' : 'invite'); if (!v) throw fail(404, 'no_image'); return { type: 'image/jpeg', b64: v, headers: { 'cache-control': 'public, max-age=86400, immutable' } } }
 
   // ---- your own branch, by private link ----
   if (a === 'me') {
