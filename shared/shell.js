@@ -20,6 +20,20 @@ export function headTags({ title, description, path = '/', origin = '', noindex 
     '<meta name="twitter:card" content="summary_large_image">', `<meta name="twitter:title" content="${esc(title)}">`, `<meta name="twitter:description" content="${esc(description)}">`, `<meta name="twitter:image" content="${img}">`,
     '<link rel="icon" href="/icon.svg" type="image/svg+xml">'].join('\n')
 }
+/**
+ * "About and privacy", as sections of plain sentences: used by the server's page and by the page's own script, so
+ * they cannot drift apart. `operator` and `contact` come from the deployment's settings (OPERATOR_NAME, CONTACT_EMAIL).
+ */
+export const about = ({ operator, contact } = {}) => [
+  { h: 'Who runs this', p: [operator ? `${SITE} is run by ${operator}.` : `${SITE} is a small, independent project.`, contact ? `You can write to ${contact}.` : null, 'It is made for adults. Please do not use it if you are under 18.'] },
+  { h: 'What is kept', p: ['The first name on your ornament, the ornament you chose and where it hangs, and the words of your wish.', 'If you make an ornament for a friend: both first names and the wish, until they hang it.', 'A random number for your phone, kept only in scrambled form. It is how the tree knows one wish per person and stops one phone flooding it.', 'No accounts, no passwords, no email addresses, no surnames.'] },
+  { h: 'Who can read what', p: ['The wish on your own ornament can be read by anyone who visits the tree.', 'Wishes other people leave for you can only be read with your key, your private link, and not before Christmas morning.', 'A wish that breaks the rules can be reported by anyone and is hidden while the team looks at it.'] },
+  { h: 'On your phone', p: ['One cookie holding that random number, for six months.', 'In the browser\'s own storage: your key, the name you signed with, and which trees you have already lit.', 'There is no advertising and no tracking. The lettering is loaded from Google Fonts, which sees your phone\'s address when it does.'] },
+  { h: 'How long', p: ['Everything is deleted on 1 February 2027: ornaments, wishes and the scrambled numbers.'] },
+  { h: 'Removing your ornament', p: ['Open your own link (your key) and choose "Remove my ornament". It leaves the tree at once and its wishes are deleted.', contact ? `If you have lost your key, write to ${contact} with the tree and the name on the ornament.` : 'If you have lost your key, the ornament is still deleted with everything else on 1 February 2027.'] },
+  { h: 'Money', p: ['Nothing is bought, sold or collected here. If a tree ever gives to a charity, its own page says who gives what, and to whom.'] },
+].map(s => ({ ...s, p: s.p.filter(Boolean) }))
+
 /** A whole document, for addresses the server answers. The built script and stylesheet have fixed names. */
 export function page(p, origin = '') {
   return `<!doctype html>
@@ -68,7 +82,7 @@ const landing = () => `<main class="landing">
 <ol class="steps">${STEPS.map((st, i) => `<li class="step"><span class="num">${i + 1}</span>${icon(st.icon)}<h3>${st.title}</h3><p>${st.text}</p></li>`).join('')}</ol></section>
 <section class="band" aria-labelledby="ways"><h2 id="ways">Three ways to begin</h2>
 <div class="paths">${WAYS.map(w => `<a class="path" href="${w.href}">${icon(w.icon)}<h3>${w.title}</h3><p>${w.text}</p><span class="go">${w.short} ${icon('arrow')}</span></a>`).join('')}</div></section>
-<footer class="foot-note"><p>${FINE}</p></footer>
+<footer class="foot-note"><p>${FINE}</p><p><a href="/about">About and privacy</a></p></footer>
 </main>`
 const pre = inner => `<main class="pre">${inner}</main>`
 
@@ -87,6 +101,8 @@ export const pages = {
     body: pre(`<h1>Thank you from ${esc(card.branchName || card.name)}</h1><p class="lede">Open the wishes waiting for you.</p><p class="fine">The tree is loading.</p>`) }),
   sent: ({ sent, tree }) => ({ path: '/w/', noindex: true, image: '/og-wish.jpg', imageAlt: 'A wrapped parcel under a Christmas tree', title: `An ornament for ${sent.to}, from ${sent.from}`, description: `${sent.from} made ${sent.to} an ornament on ${tree.name}, with a wish under it. Hang it to keep the wish.`,
     body: pre(`<h1>${esc(sent.from)} made ${esc(sent.to)} an ornament</h1><p class="lede">There is a wish under it, wrapped until Christmas morning. Hang it on ${esc(tree.name)} to keep the wish.</p><p class="fine">Loading.</p>`) }),
+  about: who => ({ path: '/about', title: `About and privacy · ${SITE}`, description: `Who runs ${SITE}, what it keeps, who can read your wish, and how to remove your ornament.`,
+    body: `<main class="pre about"><p class="fine"><a href="/">${SITE}</a></p><h1>About and privacy</h1>${about(who).map(s => `<h2>${esc(s.h)}</h2>${s.p.map(t => `<p>${esc(t)}</p>`).join('')}`).join('')}</main>` }),
   missing: what => ({ path: '/', noindex: true, status: 404, title: SITE, description: `We couldn't find that ${what}.`,
     body: pre(`<h1>We couldn't find that ${what}</h1><p class="lede">It may have been removed, or the link may be incomplete.</p><p><a href="/t/global">Go to the Giving Tree</a></p>`) }),
 }

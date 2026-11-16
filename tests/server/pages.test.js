@@ -59,3 +59,13 @@ test('pages: the sitemap lists only the public pages', () => {
   const xml = sitemap('https://tree.test')
   assert.deepEqual([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]), ['https://tree.test/', 'https://tree.test/t/global'])
 })
+
+test('about and privacy: says who runs the site, what is kept, how long, and how to remove an ornament', async () => {
+  const { call } = world({ operator: 'Example Studio Ltd', contact: 'hello@example.org' })
+  const a = await call('GET', 'page/about'); assert.equal(a.status ?? 200, 200)
+  for (const words of ['About and privacy', 'Example Studio Ltd', 'hello@example.org', '1 February 2027', 'Remove my ornament', 'under 18', 'One cookie', 'Google Fonts']) assert.equal(a.text.includes(words), true, words)
+  assert.deepEqual((await call('GET', 'site')).json, { operator: 'Example Studio Ltd', contact: 'hello@example.org' })
+  // with nothing set it still reads sensibly and invents no contact
+  const bare = world(), b = (await bare.call('GET', 'page/about')).text
+  assert.equal(/write to/.test(b), false); assert.match(b, /small, independent project/); assert.deepEqual((await bare.call('GET', 'site')).json, { operator: null, contact: null })
+})

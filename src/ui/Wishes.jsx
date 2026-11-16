@@ -104,9 +104,13 @@ function NextSteps({ onAsk, onKey, onWalk }) {
 
 /** End of visit 1: what to do next, then keeping your key. */
 export function Greeting({ brand }) {
-  useEffect(() => { const t = setTimeout(() => { const st = useStore.getState(); st.createCard().then(c => uploadCardPreview(c.token, 'invite', previewWords(useStore.getState(), false))).catch(() => {}) }, 1200); return () => clearTimeout(t) }, [])
+  // The ornament is saved a moment after it is hung. If that fails, say so and offer to try again (and try again by
+  // itself when the phone comes back online): nobody should walk away thinking an unsaved ornament is on the tree.
+  const [unsaved, setUnsaved] = useState(false)
+  const saveNow = () => useStore.getState().createCard().then(c => { setUnsaved(false); uploadCardPreview(c.token, 'invite', previewWords(useStore.getState(), false)); return c }, e => { setUnsaved(true); throw e })
+  useEffect(() => { const t = setTimeout(() => saveNow().catch(() => {}), 1200), on = () => saveNow().catch(() => {}); window.addEventListener('online', on); return () => { clearTimeout(t); window.removeEventListener('online', on) } }, [])
   const s = useStore(), [share, setShare] = useState(false), [save, setSave] = useState(false), asked = useRef(false), walkAfter = useRef(false)
-  const withCard = async fn => { try { await s.createCard(); fn() } catch (e) { s.toastMsg("We couldn't save your ornament. Check your connection.") } }
+  const withCard = async fn => { try { await saveNow(); fn() } catch (e) { s.toastMsg("We couldn't save your ornament. Check your connection.") } }
   const closeSave = () => { setSave(false); if (walkAfter.current) s.setPhase('explore') }
   const walk = () => { if (asked.current) return s.setPhase('explore'); asked.current = true; walkAfter.current = true; withCard(() => setSave(true)) }
   const closeShare = () => { setShare(false); if (!asked.current) { asked.current = true; setSave(true) } }
@@ -115,7 +119,8 @@ export function Greeting({ brand }) {
       {/* before the 25th the square counts down; the greeting waits for the day */}
       <div className="greet"><div className="hc">{s.clock.phase === 'nye' ? 'Happy New Year' : s.clock.phase === 'advent' ? words.countdown({ days: daysLeft(s) }) : 'Happy Christmas'}</div><div className="nm">{s.clock.phase === 'advent' ? `${s.myName}'s ornament is up` : `from ${s.myName}`}</div></div>
       <div className="foot">
-        <p className="note">{words.greetingNote({ giving: s.tree.giving, own: s.tree.kind === 'community' })}</p>
+        {unsaved ? <p className="note warn" role="alert">Your ornament didn’t save. Check your connection. <button type="button" className="btn text" onClick={() => saveNow().catch(() => {})}>Try again</button></p>
+          : <p className="note">{words.greetingNote({ giving: s.tree.giving, own: s.tree.kind === 'community' })}</p>}
         <NextSteps onAsk={() => withCard(() => setShare(true))} onWalk={walk} onKey={() => { asked.current = true; withCard(() => setSave(true)) }} />
       </div>
     </div>
@@ -162,6 +167,7 @@ export function TreeSheet({ onClose }) {
         <p className="sub">Anyone with this link can hang an ornament on {s.tree.name}, and everyone on the tree can leave each other a wish.</p>
         <p className="linkbox">{link}</p>
         <ShareRow text={words.treeInvite({ name: s.tree.name })} link={link} />
+        <p className="fine smalllinks"><a href="/about" target="_blank" rel="noopener">About and privacy</a></p>
       </div>
     </div>
   )
@@ -236,6 +242,8 @@ const Tags = ({ list }) => <div className="tags">{list.map(p => <span key={p.id}
 /** Coming back before Christmas: the parcels pile up, but nothing opens. */
 export function Home({ brand }) {
   const s = useStore(), [share, setShare] = useState(false), [save, setSave] = useState(false), friends = s.parcels.filter(p => p.kind === 'friend'), beside = s.me.branch.kids.length, own = s.parcels.find(p => p.kind === 'self')
+  const [asking, setAsking] = useState(false), [busy, setBusy] = useState(false)
+  const remove = async () => { setBusy(true); try { await s.removeMine() } catch (e) { setBusy(false); s.toastMsg("That didn't work. Check your connection and try again.") } }
   return (<>
     <div className="finale on">
       <div className="greet"><div className="hc small">{s.myName}'s ornament</div></div>
@@ -246,6 +254,9 @@ export function Home({ brand }) {
         <p className="waiting">{friends.length ? `${plural(friends.length, 'wish', 'wishes')} for you` : 'No wishes for you yet'} · {words.opens({ days: daysLeft(s) })}</p>
         {beside > 0 && <p className="note">{beside === 1 ? `${s.me.branch.kids[0].name} hung theirs next to yours.` : `${beside} people hung theirs next to yours.`}</p>}
         <NextSteps onAsk={() => setShare(true)} onWalk={() => s.setPhase('explore')} onKey={() => setSave(true)} />
+        {asking ? <div className="confirm" role="alertdialog" aria-label="Remove my ornament"><p className="fine">Remove your ornament and delete its wishes{friends.length ? `, including the ${plural(friends.length, 'wish', 'wishes')} left for you` : ''}? This cannot be undone.</p>
+            <div className="btnrow"><button type="button" className="btn ghost danger" disabled={busy} onClick={remove}>{busy ? 'Removing…' : 'Remove it'}</button><button type="button" className="btn ghost" disabled={busy} onClick={() => setAsking(false)}>Keep it</button></div></div>
+          : <p className="fine smalllinks"><button type="button" className="btn text" onClick={() => setAsking(true)}>Remove my ornament</button> · <a href="/about" target="_blank" rel="noopener">About and privacy</a></p>}
       </div>
     </div>
     {share && <ShareSheet kind="invite" brand={brand} onClose={() => setShare(false)} />}

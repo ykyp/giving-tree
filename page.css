@@ -377,3 +377,10 @@ body:has(.landing){padding:0}
 
 /* the story button under the four chat apps */
 .sr-story{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}.sr-story svg{width:20px;height:20px;color:#ffe3ad}
+
+/* ---- About and privacy, removing an ornament, an unsaved ornament ---- */
+.pre.about{justify-content:flex-start;gap:8px;padding-top:40px;padding-bottom:60px}.pre.about h2{margin-top:22px;font-size:24px}.pre.about p{margin:0;color:#d6dbec;line-height:1.5}
+.foot-note p+p{margin-top:10px}.foot-note a,.smalllinks a{color:var(--gold)}
+.smalllinks{text-align:center;margin:2px 0 0}.smalllinks .btn.text{display:inline;padding:0;min-height:0;font-size:inherit}
+.confirm{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14)}.confirm .fine{margin:0;text-align:center}
+.note.warn{color:#ffd9a0}.note.warn .btn.text{display:inline;padding:0;min-height:0}

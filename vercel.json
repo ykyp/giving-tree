@@ -30,6 +30,10 @@
       "destination": "/app.html"
     },
     {
+      "source": "/about",
+      "destination": "/api/index?p=page/about"
+    },
+    {
       "source": "/ops",
       "destination": "/app.html"
     },
