@@ -10,8 +10,10 @@ import { givingComplete } from './repo-memory.js'
 
 const BOT = /bot\b|bot\/|crawl|spider|facebookexternalhit|whatsapp|slack|telegram|discord|linkedin|skypeuripreview|preview/i
 const EVENTS = new Set(['share_v1', 'share_v2', 'saved_calendar', 'saved_selfsend'])
+// how the 3D scene behaved on a visitor's device: counted, never tied to the device (specs/012-production-scene)
+export const SCENE_EVENTS = ['no_webgl', 'gl_lost', 'gl_restored', 'scene_error', 'chunk_error', 'tier_low']
 // per device: 3 cards a day on a tree, 10 wishes an hour (40 on a tree for your own people, where everyone wishes everyone), 2 new trees a day
-const LIMITS = { report: [36e5, 5], card: [864e5, 3], wish: [36e5, 10], wishOwn: [36e5, 40], tree: [864e5, 2], log: [6e4, 20] }
+const LIMITS = { report: [36e5, 5], card: [864e5, 3], wish: [36e5, 10], wishOwn: [36e5, 40], tree: [864e5, 2], log: [6e4, 20], scene: [864e5, 12] }
 const REPORTS_TO_TAKE_DOWN = 3
 const TREE_NAME_MAX = 40
 const ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -220,7 +222,13 @@ async function route(req, repo, env, ctx) {
     if (POST && b2 === 'remove') { await repo.removeCard(c.id, 'asked from their own link', t); return { ok: true } }
   }
 
-  if (POST && a === 'event') { if (!EVENTS.has(body.name)) throw fail(400, 'bad_event'); const tree = await treeBySlug(repo, body.tree); await repo.addEvent(tree.slug, body.name, t); return { ok: true } }
+  if (POST && a === 'event') {
+    if (SCENE_EVENTS.includes(body.name)) { // may happen before the page knows its tree, so an unknown one counts against the shared tree
+      await limit(repo, device, 'scene', null, t); const tr = await repo.getTree(String(body.tree || ''))
+      await repo.addEvent(tr ? tr.slug : 'global', body.name, t); return { ok: true }
+    }
+    if (!EVENTS.has(body.name)) throw fail(400, 'bad_event'); const tree = await treeBySlug(repo, body.tree); await repo.addEvent(tree.slug, body.name, t); return { ok: true }
+  }
 
   // Errors the page hit, for the team. Never wishes or private links.
   if (POST && a === 'log') {
@@ -253,7 +261,7 @@ async function route(req, repo, env, ctx) {
   if (a === 'admin') {
     const allowed = env.operator ? await env.operator(headers) : !!env.adminSecret && headers.authorization === `Bearer ${env.adminSecret}`
     if (!allowed) throw fail(401, 'nope')
-    if (GET && b1 === 'trees') return { trees: await Promise.all((await repo.listTrees()).map(async tr => ({ ...tr, measures: await repo.measures(tr.slug, RELEASE_UTC), counts: await repo.counts(tr.slug) }))) }
+    if (GET && b1 === 'trees') return { trees: await Promise.all((await repo.listTrees()).map(async tr => ({ ...tr, measures: await repo.measures(tr.slug, RELEASE_UTC, t), counts: await repo.counts(tr.slug) }))) }
     if (POST && b1 === 'trees' && !b2) {
       const slug = String(body.slug || '').toLowerCase(), name = String(body.name || '').trim()
       if (!/^[a-z0-9-]{3,30}$/.test(slug) || !name || name.length > TREE_NAME_MAX || badName(name)) throw fail(400, 'bad_name')
@@ -269,7 +277,7 @@ async function route(req, repo, env, ctx) {
       return repo.setGiving(tr.slug, g) // never changes the recorded total
     }
     if (POST && b1 === 'trees' && b3 === 'takedown') { if (!await repo.takeDownTree(String(b2), t)) throw fail(404, 'no_tree'); return { ok: true } }
-    if (GET && b1 === 'measures') { const tr = await treeBySlug(repo, query.tree, true); return { ...(await repo.measures(tr.slug, RELEASE_UTC)), counts: await repo.counts(tr.slug) } }
+    if (GET && b1 === 'measures') { const tr = await treeBySlug(repo, query.tree, true); return { ...(await repo.measures(tr.slug, RELEASE_UTC, t)), counts: await repo.counts(tr.slug) } }
     if (GET && b1 === 'review') return { wishes: await Promise.all((await repo.reviewQueue()).map(async w => { const c = await repo.getCard(w.to), tr = c && await repo.getTree(c.tree)
       return { id: w.id, text: w.text, from: w.from, kind: w.kind, at: w.at, reported: !!w.reported, to: w.to, toName: c?.name || null, tree: c?.tree || null, treeName: tr?.name || null } })) }
     if (POST && b1 === 'review') { if (body.action !== 'approve' && body.action !== 'reject') throw fail(400, 'bad_action'); const status = await repo.decideWish(b2, body.action === 'approve' ? 'ok' : 'rejected'); if (!status) throw fail(404, 'no_wish'); return { status } }

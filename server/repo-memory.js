@@ -16,6 +16,7 @@ export const GLOBAL_TREE = { slug: 'global', kind: 'global', name: 'The Giving T
 /** Giving can only be live with every setting present and the agreement signed. */
 export const givingComplete = g => !!(g.enabled && g.agreementSigned && g.sponsor && g.charityName && g.charityReg && g.perGift > 0 && g.cap > 0)
 
+const SCENE = ['no_webgl', 'gl_lost', 'gl_restored', 'scene_error', 'chunk_error', 'tier_low']
 const EMPTY = () => ({ trees: {}, cards: {}, tokens: {}, kids: {}, wishes: {}, wishList: {}, opens: {}, gifts: [], events: [], returned: {}, reminders: {}, previews: {}, limits: {}, removals: [], sent: {}, reports: {}, seq: 0 })
 
 export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
@@ -119,7 +120,7 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
     async addEvent(tree, name, at) { s.events.push({ tree, name, at }); persist() },
     /** True the first time a card's owner comes back after release. */
     async markReturned(cardId) { if (s.returned[cardId]) return false; s.returned[cardId] = true; persist(); return true },
-    async measures(slug, releaseAt) {
+    async measures(slug, releaseAt, now = Date.now()) {
       purge()
       const ids = new Set(cardsOf(slug).map(c => c.id)), ev = n => s.events.filter(e => e.tree === slug && e.name === n).length
       const opens = Object.entries(s.opens).filter(([k, o]) => ids.has(k.split('|')[0]) && o.reason !== 'own').map(([, o]) => o)
@@ -127,6 +128,7 @@ export function memoryRepo({ load, save, now = Date.now, seed = [] } = {}) {
       return { cards: ids.size, wishes: wishes.filter(w => w.kind === 'friend').length, self_wishes: wishes.filter(w => w.kind === 'self').length,
         opens_v1: opens.filter(o => o.at < releaseAt).length, opens_v2: opens.filter(o => o.at >= releaseAt).length,
         share_v1: ev('share_v1'), share_v2: ev('share_v2'), saved_calendar: ev('saved_calendar'), saved_selfsend: ev('saved_selfsend'), saved_email: ev('saved_email'), returns: ev('returned'),
+        scene: Object.fromEntries(SCENE.map(n => [n, { total: ev(n), day: s.events.filter(e => e.tree === slug && e.name === n && e.at >= now - 864e5).length }])),
         given: s.trees[slug].giving.given }
     },
 

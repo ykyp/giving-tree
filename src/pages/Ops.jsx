@@ -59,6 +59,9 @@ function Review({ api, note }) {
   )
 }
 
+// how the 3D scene behaved on visitors' devices: counts only
+const SCENE = [['no_webgl', 'no 3D'], ['gl_lost', 'picture lost'], ['gl_restored', 'came back'], ['scene_error', 'crashed'], ['chunk_error', 'script failed'], ['tier_low', 'dropped to low detail']]
+
 function Trees({ api, note }) {
   const [trees, setTrees] = useState(null), [open, setOpen] = useState(null), [orns, setOrns] = useState([])
   const load = () => api('GET', 'admin/trees').then(r => setTrees(r.trees))
@@ -73,6 +76,7 @@ function Trees({ api, note }) {
       {(trees || []).map(t => <article key={t.slug} className="ops-item">
         <p className="ops-name"><a href={`/t/${t.slug}`}>{t.name}</a> {!t.published && <em>taken down</em>}</p>
         <p className="fine">{t.counts.ornaments} ornaments · {t.counts.wishes} wishes · /t/{t.slug}</p>
+        {t.measures?.scene && <p className="fine">Scene health (all time, last 24 h): {SCENE.map(([k, label]) => `${label} ${t.measures.scene[k].total}, ${t.measures.scene[k].day}`).join(' · ')}</p>}
         <div className="btnrow"><button type="button" className="btn ghost" aria-expanded={open === t.slug} onClick={() => show(t.slug)}>{open === t.slug ? 'Hide ornaments' : 'Ornaments'}</button>
           {t.kind !== 'global' && t.published && <button type="button" className="btn ghost danger" onClick={() => takeDown(t)}>Take down</button>}</div>
         {open === t.slug && <ul className="ops-orns">{orns.length ? orns.map(o => <li key={o.id}><div><b>{o.name}</b>{o.wish && <span>{o.wish}</span>}</div>

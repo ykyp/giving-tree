@@ -44,8 +44,26 @@
   ],
   "headers": [
     {
+      "source": "/chunks/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/(me|w)/(.*)",
       "headers": [
+    {
+      "source": "/chunks/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
         {
           "key": "X-Robots-Tag",
           "value": "noindex"
@@ -59,6 +77,15 @@
     {
       "source": "/ops",
       "headers": [
+    {
+      "source": "/chunks/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
         {
           "key": "X-Robots-Tag",
           "value": "noindex"
