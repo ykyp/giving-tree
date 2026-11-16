@@ -12,6 +12,7 @@ function devApi() {
   const file = '.data/repo.json'
   return { name: 'giving-tree-dev-api', configureServer(server) {
     const repo = memoryRepo({ seed: TEST_TREES, load: () => { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch (e) { return {} } }, save: d => { fs.mkdirSync('.data', { recursive: true }); fs.writeFileSync(file, JSON.stringify(d)) } })
+    server.middlewares.use((req, res, next) => { const m = /^\/pic\/(.+)/.exec(req.url); if (m) req.url = '/api/img/' + m[1]; next() }) // as vercel.json does
     server.middlewares.use('/api', (req, res) => {
       let raw = ''; req.on('data', c => raw += c); req.on('end', async () => {
         const u = new URL(req.url, 'http://x')

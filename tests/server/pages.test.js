@@ -37,10 +37,12 @@ test('pages: card, thank-you and sent-wish pages describe themselves, are not li
   const jpeg = 'data:image/jpeg;base64,' + 'A'.repeat(400)
   await call('POST', `me/${A.token}/preview`, { body: { kind: 'invite', jpeg }, dev: 'A' })
   const own = (await call('GET', `page/c/${A.id}`)).text.match(/og:image" content="([^"]+)"/)[1]
-  assert.match(own, new RegExp(`/api/img/${A.id}/invite\\?v=\\w+$`)); assert.match((await call('GET', `page/c/${A.id}`, { query: { t: '1' } })).text, /og:image" content="[^"]+\/og\.jpg"/)
+  assert.match(own, new RegExp(`/pic/${A.id}/invite-\\w+\\.jpg$`)); assert.match((await call('GET', `page/c/${A.id}`, { query: { t: '1' } })).text, /og:image" content="[^"]+\/og\.jpg"/)
   await call('POST', `me/${A.token}/preview`, { body: { kind: 'invite', jpeg: jpeg + 'BBBBBBBB' }, dev: 'A' })
   assert.notEqual((await call('GET', `page/c/${A.id}`)).text.match(/og:image" content="([^"]+)"/)[1], own)
-  const img = await call('GET', `img/${A.id}/invite`); assert.equal(img.type, 'image/jpeg'); assert.equal((await call('GET', `img/${A.id}/thanks`)).status, 404)
+  const img = await call('GET', `img/${A.id}/invite`); assert.equal(img.type, 'image/jpeg');
+  // the address in the page, as vercel.json hands it over, and the HEAD request some chat apps make first
+  const named = own.match(/\/pic\/(.+)$/)[1]; assert.equal((await call('GET', `img/${named}`)).type, 'image/jpeg'); assert.equal((await call('HEAD', `img/${named}`)).type, 'image/jpeg'); assert.equal((await call('HEAD', `page/c/${A.id}`)).status, 200); assert.equal((await call('GET', `img/${A.id}/thanks`)).status, 404)
   assert.equal(w.includes(sent.token), false)
   assert.equal((await call('GET', 'page/c/nope')).status, 404); assert.equal((await call('GET', 'page/w/nope')).status, 404)
 })
